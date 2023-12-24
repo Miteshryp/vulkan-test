@@ -1,4 +1,4 @@
-use std::{fmt::Error, io::Read, process::exit, sync::Arc};
+use std::{fmt::Error, process::exit, sync::Arc};
 use vulkano::{
     device::{
         physical::{self, PhysicalDevice},
@@ -9,12 +9,15 @@ use vulkano::{
 };
 use winit::{
     event::{ElementState, Event, Modifiers, MouseButton, WindowEvent},
-    event_loop::{self, EventLoop, EventLoopProxy, EventLoopWindowTarget},
+    event_loop::{self, EventLoop, EventLoopWindowTarget},
     keyboard::{Key, ModifiersState},
     platform::modifier_supplement::KeyEventExtModifierSupplement,
     window::{Window, WindowBuilder},
 };
 
+
+#[allow(unused_variables)]
+#[allow(unused_assignments)]
 fn winit_handle_window_events(event: WindowEvent, window_target: &EventLoopWindowTarget<()>) {
     let mut modifiers = ModifiersState::default();
 
@@ -80,6 +83,9 @@ fn winit_handle_window_events(event: WindowEvent, window_target: &EventLoopWindo
     return;
 }
 
+
+#[allow(unused_variables)]
+#[allow(unused_assignments)]
 fn initialise_vulkan_runtime() -> Result<(), Error> {
     /*
        Step 1. Select a Physical Device
@@ -94,7 +100,7 @@ fn initialise_vulkan_runtime() -> Result<(), Error> {
         vulkano::instance::Instance::new(vulkan_library, InstanceCreateInfo::default())
             .unwrap_or_else(|err| panic!("Failed to create Vulkan Instance \n {:?}", err));
 
-    let logical_device: Arc<Device>;
+    let mut logical_device: Arc<Device>;
     let mut queues: Vec<vulkano::device::Queue>;
 
     /*
@@ -118,7 +124,7 @@ fn initialise_vulkan_runtime() -> Result<(), Error> {
                 // Selecting the graphics card for rendering purposes
 
                 // Creating the logical device for this physical device
-                let (logical_device, created_queues) = Device::new(
+                let (created_logical_device, created_queues) = Device::new(
                     physical_device,
                     DeviceCreateInfo {
                         queue_create_infos: vec![QueueCreateInfo {
@@ -130,6 +136,7 @@ fn initialise_vulkan_runtime() -> Result<(), Error> {
                 )
                 .unwrap();
 
+                logical_device = created_logical_device;
                 device_selected = true;
                 break;
             }
@@ -181,7 +188,7 @@ fn initialise_vulkan_runtime() -> Result<(), Error> {
         }
 
         // Custom user induced events (EventLoopProxy::send_event)
-        Event::UserEvent(event) => {}
+        Event::UserEvent(_event) => {}
 
         Event::LoopExiting => {
             println!("Exiting the event loop");
@@ -211,5 +218,5 @@ fn initialise_vulkan_runtime() -> Result<(), Error> {
 
 fn main() {
     println!("Hello, world!");
-    initialise_vulkan_runtime();
+    let _ = initialise_vulkan_runtime();
 }
