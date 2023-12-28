@@ -1,6 +1,6 @@
 use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex};
 
-#[derive(BufferContents, Vertex)]
+#[derive(BufferContents, Vertex, Clone)]
 #[repr(C)]
 
 pub struct Vec2 {
