@@ -22,6 +22,7 @@ pub mod vs {
             // layout(location = 0) in vec2 position;
             layout(location = 0) in float x;
             layout(location = 1) in float y;
+            layout(location = 2) in float z;
 
             layout(set = 0, binding = 0) uniform Data {
                 float view;
@@ -31,7 +32,7 @@ pub mod vs {
             
             
             void main() {
-                gl_Position = vec4(x, y, 0.0, 1.0);
+                gl_Position = vec4(x, y, z, 1.0);
                 v = uniforms.view;
             }
             ",

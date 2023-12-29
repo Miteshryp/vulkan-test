@@ -1,8 +1,13 @@
 mod shaders;
 mod vertex;
 
-use std::{process::exit, sync::Arc, time::{UNIX_EPOCH, SystemTime}, alloc::System};
 use shaders::fs;
+use std::{
+    alloc::System,
+    process::exit,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
@@ -34,16 +39,17 @@ use vulkano::{
             input_assembly::InputAssemblyState,
             vertex_input::{Vertex, VertexDefinition},
             viewport::{Viewport, ViewportState},
-            GraphicsPipelineCreateInfo,
+            GraphicsPipelineCreateInfo, depth_stencil,
         },
         layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo},
         GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout,
         PipelineShaderStageCreateInfo,
     },
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
+    shader::spirv::LoopControl,
     swapchain::{self, Surface, SurfaceInfo, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo},
     sync::{self, GpuFuture},
-    Validated, Version, VulkanError, VulkanLibrary, shader::spirv::LoopControl,
+    Validated, Version, VulkanError, VulkanLibrary,
 };
 use winit::{
     event::{ElementState, Event, Modifiers, MouseButton, WindowEvent},
@@ -56,18 +62,17 @@ use winit::{
 // type name for buffer allocator
 type GenericBufferAllocator =
     Arc<GenericMemoryAllocator<vulkano::memory::allocator::FreeListAllocator>>;
-type CommandBufferType = 
-    Arc<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>>;
+type CommandBufferType = Arc<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>>;
 
 struct RenderTargetInfo {
     pipeline: Arc<GraphicsPipeline>,
     render_pass: Arc<RenderPass>,
-    fbos: Vec<Arc<Framebuffer>>
+    fbos: Vec<Arc<Framebuffer>>,
 }
 
 struct InstanceAllocators {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
-    memory_allocator: GenericBufferAllocator
+    memory_allocator: GenericBufferAllocator,
 }
 struct VulkanInstance {
     logical: Arc<Device>,
@@ -77,7 +82,7 @@ struct VulkanInstance {
     swapchain_info: VulkanSwapchainInfo,
     render_target: RenderTargetInfo,
 
-    allocators: InstanceAllocators
+    allocators: InstanceAllocators,
 }
 
 struct VulkanSwapchainInfo {
@@ -133,7 +138,10 @@ fn create_command_buffer_allocator(device: Arc<Device>) -> Arc<StandardCommandBu
 }
 
 // fn create_render_pass(device: Arc<Device>, instance: &VulkanInstance) -> Arc<RenderPass> {
-fn create_render_pass(device: Arc<Device>, swapchain_info: &VulkanSwapchainInfo) -> Arc<RenderPass> {
+fn create_render_pass(
+    device: Arc<Device>,
+    swapchain_info: &VulkanSwapchainInfo,
+) -> Arc<RenderPass> {
     // need 3 things: device Arc, attachments, and a pass
     let format = swapchain_info.create_info.image_format.clone();
 
@@ -141,15 +149,23 @@ fn create_render_pass(device: Arc<Device>, swapchain_info: &VulkanSwapchainInfo)
         device.clone(),
         attachments: {
             color: {
-                format: format, // vulkano::format::Format::B8G8R8A8_SRGB, // vulkano::format::Format::R8G8B8A8_UNORM,
+                format: format,
                 samples: 1,
                 load_op: Clear,
                 store_op: Store,
             },
+
+            // depth: {
+            //     format: vulkano::format::Format::D16_UNORM,
+            //     samples: 1,
+            //     load_op: Clear,
+            //     store_op: DontCare
+            // }
         },
         pass: {
             color: [color],
-            depth_stencil: {},
+            depth_stencil: {}
+            // depth_stencil: {depth},
         },
     )
     .unwrap()
@@ -170,7 +186,7 @@ fn create_graphics_pipeline(
         .entry_point("main")
         .unwrap();
 
-    let vertex_shader_input_state = vertex::Vec2::per_vertex()
+    let vertex_shader_input_state = vertex::Vec3::per_vertex()
         .definition(&vertex_shader.info().input_interface)
         .unwrap();
 
@@ -235,6 +251,8 @@ fn create_graphics_pipeline(
 
 fn get_framebuffer_object(render_pass: Arc<RenderPass>, image: Arc<Image>) -> Arc<Framebuffer> {
     let view = ImageView::new_default(image.clone()).unwrap();
+    // let depth_buffer = ImageView::new_default(vulkano::image::Image::s)
+    
 
     Framebuffer::new(
         render_pass,
@@ -276,14 +294,14 @@ fn create_buffer_from_data<T>(
     allocator: GenericBufferAllocator,
     data: T,
     buffer_usage: BufferUsage,
-    memory_type_filter: MemoryTypeFilter
+    memory_type_filter: MemoryTypeFilter,
 ) -> Subbuffer<T>
-    where
-        T: BufferContents
+where
+    T: BufferContents,
 {
     Buffer::from_data(
         allocator,
-                BufferCreateInfo {
+        BufferCreateInfo {
             usage: buffer_usage,
             ..Default::default()
         },
@@ -291,8 +309,9 @@ fn create_buffer_from_data<T>(
             memory_type_filter: memory_type_filter,
             ..Default::default()
         },
-        data
-    ).unwrap()
+        data,
+    )
+    .unwrap()
 }
 
 #[allow(unused_variables)]
@@ -376,9 +395,13 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
     // let queue = instance.device_queues.iter().next().unwrap();
 
     let vertices = Vec::from([
-        vertex::Vec2 { x: 0.0, y: 1.0 },
-        vertex::Vec2 { x: -1.0, y: -1.0 },
-        vertex::Vec2 { x: 1.0, y: -1.0 },
+        vertex::Vec3 { x: 0.0, y: -1.0, z: 0.3 },
+        vertex::Vec3 { x: -1.0, y: 1.0, z: 0.3 },
+        vertex::Vec3 { x: 1.0, y: 1.0, z: 0.3 },
+        vertex::Vec3 { x: -1.0, y: -1.0, z: 0.5 },
+        vertex::Vec3 { x: 0.0, y: 1.0, z: 0.5 },
+        vertex::Vec3 { x: 1.0, y: -1.0, z: 0.5 },
+
     ]);
 
     // // buffer allocator for memory buffer objects
@@ -418,7 +441,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
     let mut command_buffers = create_command_buffers(&instance, vertices.clone());
     println!("First call");
-    
+
     el.set_control_flow(ControlFlow::Poll);
     let _ = el.run(move |app_event, elwt| match app_event {
         // Window based Events
@@ -428,7 +451,6 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
         } => {
             window_resized = true;
         }
-
 
         Event::WindowEvent {
             event: WindowEvent::RedrawRequested,
@@ -449,13 +471,17 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                 );
 
                 // refreshing the render targets
-                instance.render_target = refresh_render_target(window.clone(), instance.get_logical_device(), &instance.swapchain_info);
+                instance.render_target = refresh_render_target(
+                    window.clone(),
+                    instance.get_logical_device(),
+                    &instance.swapchain_info,
+                );
 
-                // recreating the render pass, fbos, pipeline and command buffers with the new swapchain images
-                command_buffers =
-                    create_command_buffers(&instance, vertices.clone());
             }
+            // recreating the render pass, fbos, pipeline and command buffers with the new swapchain images
+            command_buffers = create_command_buffers(&instance, vertices.clone());
 
+            
             let (image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
                 instance.swapchain_info.swapchain.clone(),
                 None,
@@ -685,10 +711,11 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
 
     // TODO: Explore graphics pipeline or command builder extensibilities
 
-    let render_target_info = refresh_render_target(window.clone(), logical_device.clone(), &swapchain);
+    let render_target_info =
+        refresh_render_target(window.clone(), logical_device.clone(), &swapchain);
     let allocators = InstanceAllocators {
         command_buffer_allocator: create_command_buffer_allocator(logical_device.clone()),
-        memory_allocator: create_buffer_allocator(logical_device.clone())
+        memory_allocator: create_buffer_allocator(logical_device.clone()),
     };
 
     VulkanInstance {
@@ -698,7 +725,7 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
         surface: surface,
         swapchain_info: swapchain,
         render_target: render_target_info,
-        allocators: allocators
+        allocators: allocators,
     }
 
     // return (logical_device, device_queues, surface_swapchain);
@@ -725,31 +752,29 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
 
 static mut start: Option<SystemTime> = None;
 
-
 fn refresh_render_target(
     window: Arc<Window>,
     device: Arc<Device>,
     swapchain_info: &VulkanSwapchainInfo,
-
 ) -> RenderTargetInfo {
-        // TODO: Analyze the following step carefully and understand it more deeply
-        let render_pass = create_render_pass(device.clone(), swapchain_info); // defines the schema information required for configuring the output of shaders to the framebuffer
+    // TODO: Analyze the following step carefully and understand it more deeply
+    let render_pass = create_render_pass(device.clone(), swapchain_info); // defines the schema information required for configuring the output of shaders to the framebuffer
 
-        // Create a framebuffer for each swapchain image
-        let fbos: Vec<Arc<Framebuffer>> = swapchain_info
-            .images
-            .iter()
-            .map(|img| get_framebuffer_object(render_pass.clone(), img.clone()))
-            .collect();
-    
-        let graphics_pipeline =
-            create_graphics_pipeline(window.clone(), device.clone(), render_pass.clone());
+    // Create a framebuffer for each swapchain image
+    let fbos: Vec<Arc<Framebuffer>> = swapchain_info
+        .images
+        .iter()
+        .map(|img| get_framebuffer_object(render_pass.clone(), img.clone()))
+        .collect();
 
-        RenderTargetInfo {
-            pipeline: graphics_pipeline,
-            render_pass: render_pass,
-            fbos: fbos
-        }
+    let graphics_pipeline =
+        create_graphics_pipeline(window.clone(), device.clone(), render_pass.clone());
+
+    RenderTargetInfo {
+        pipeline: graphics_pipeline,
+        render_pass: render_pass,
+        fbos: fbos,
+    }
 }
 
 /*
@@ -762,11 +787,12 @@ fn refresh_render_target(
 fn create_command_buffers(
     // window: Arc<Window>,
     instance: &VulkanInstance,
-    vertices: Vec<vertex::Vec2>,
+    vertices: Vec<vertex::Vec3>,
 ) -> Vec<CommandBufferType> {
     // buffer allocator for memory buffer objects
-    let memory_allocator: GenericBufferAllocator =
-        create_buffer_allocator(instance.get_logical_device());
+    // let memory_allocator: GenericBufferAllocator =
+    //     create_buffer_allocator(instance.get_logical_device());
+    let memory_allocator = instance.allocators.memory_allocator.clone();
 
     // let image_buffer = get_swapchain_image(device.clone());
     // let image_buffer = get_image_buffer(memory_allocator.clone());
@@ -777,9 +803,11 @@ fn create_command_buffers(
         MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
     ); // data is streamed from CPU to GPU
 
+    // let depth_stencil_buffer = Buffer::from(value)
+
     let mut f = 0.0;
     unsafe {
-        f = start.unwrap().elapsed().unwrap().as_secs_f32() as f32;//std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as f32;
+        f = start.unwrap().elapsed().unwrap().as_secs_f32() as f32; //std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as f32;
     }
     println!("{f}");
     let uniform_buffer = create_buffer_from_data(
@@ -789,7 +817,6 @@ fn create_command_buffers(
         MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
     );
 
-
     let command_buffers = build_fbo_command_buffers_for_pipeline(
         // instance.get_logical_device(),
         // instance.get_first_queue(),
@@ -797,7 +824,7 @@ fn create_command_buffers(
         // instance.get_graphics_pipeline(),
         instance,
         vertex_buffer,
-        uniform_buffer
+        uniform_buffer,
     );
 
     return command_buffers;
@@ -806,8 +833,8 @@ fn create_command_buffers(
 // Only builds the command buffers
 fn build_fbo_command_buffers_for_pipeline(
     instance: &VulkanInstance,
-    vertex_buffer: Subbuffer<[vertex::Vec2]>,
-    uniform_buffer: Subbuffer<shaders::vs::Data>
+    vertex_buffer: Subbuffer<[vertex::Vec3]>,
+    uniform_buffer: Subbuffer<shaders::vs::Data>,
 ) -> Vec<CommandBufferType> {
     // I need:
     // Command buffer built using AutoCommandBufferBuilder - done
@@ -816,7 +843,7 @@ fn build_fbo_command_buffers_for_pipeline(
     // graphics pipeline object
     // let cb_allocator = create_command_buffer_allocator(instance.get_logical_device().clone());
     let cb_allocator = &instance.allocators.command_buffer_allocator;
-    
+
     // let queue_family_index = queue.queue_family_index();
     let queue_family_index = instance.get_first_queue().queue_family_index();
     let pipeline = instance.get_graphics_pipeline();
@@ -824,24 +851,23 @@ fn build_fbo_command_buffers_for_pipeline(
     let descriptor_set_index: usize = 0;
     let descriptor_set_allocator =
         StandardDescriptorSetAllocator::new(instance.get_logical_device(), Default::default());
-    let descriptor_set_layout = 
-        pipeline
-            .layout()
-            .set_layouts()
-            .get(descriptor_set_index)
-            .unwrap();
+    let descriptor_set_layout = pipeline
+        .layout()
+        .set_layouts()
+        .get(descriptor_set_index)
+        .unwrap();
 
     let descriptor_set = PersistentDescriptorSet::new(
         &descriptor_set_allocator,
         descriptor_set_layout.clone(),
         [WriteDescriptorSet::buffer(0, uniform_buffer)], // 0 is the binding
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     let fbos = &instance.render_target.fbos;
-    
-    fbos
-        .into_iter()
+
+    fbos.into_iter()
         .map(|fb| {
             let mut command_builder = AutoCommandBufferBuilder::primary(
                 cb_allocator,
@@ -865,9 +891,9 @@ fn build_fbo_command_buffers_for_pipeline(
                 .bind_pipeline_graphics(instance.get_graphics_pipeline())
                 .unwrap()
                 .bind_descriptor_sets(
-                    PipelineBindPoint::Graphics, 
-                    instance.get_graphics_pipeline().layout().clone(), 
-                    0, 
+                    PipelineBindPoint::Graphics,
+                    instance.get_graphics_pipeline().layout().clone(),
+                    0,
                     descriptor_set.clone(),
                 )
                 .unwrap()
@@ -940,7 +966,7 @@ fn get_image_buffer(allocator: GenericBufferAllocator) -> Arc<vulkano::image::Im
 
 fn main() {
     unsafe {
-        start =  Some(SystemTime::now());
+        start = Some(SystemTime::now());
     }
 
     let (window, elwt) = create_window();
