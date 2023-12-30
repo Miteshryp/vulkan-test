@@ -71,7 +71,7 @@ type CommandBufferType = Arc<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferA
 
 struct RenderTargetInfo {
     pipeline: Arc<GraphicsPipeline>,
-    render_pass: Arc<RenderPass>,
+    // render_pass: Arc<RenderPass>,
     fbos: Vec<Arc<Framebuffer>>,
 }
 
@@ -269,32 +269,6 @@ fn get_framebuffer_object(render_pass: Arc<RenderPass>, image: Arc<Image>) -> Ar
     .unwrap()
 }
 
-fn create_buffer_from_iter<T, I>(
-    allocator: GenericBufferAllocator,
-    iter: I,
-    buffer_usage: BufferUsage,
-    memory_type_filter: MemoryTypeFilter,
-) -> Subbuffer<[T]>
-where
-    T: BufferContents,
-    I: IntoIterator<Item = T>,
-    I::IntoIter: ExactSizeIterator,
-{
-    Buffer::from_iter(
-        allocator.clone(),
-        BufferCreateInfo {
-            usage: buffer_usage,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: memory_type_filter,
-            ..Default::default()
-        },
-        iter,
-    )
-    .unwrap()
-}
-
 fn create_buffer_from_data<T>(
     allocator: GenericBufferAllocator,
     data: T,
@@ -471,32 +445,6 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             if window_resized || recreate_swapchain {
                 println!("Instance surface: {:?}", instance.surface);
                 // recreating swapchains
-
-
-                // WARNING: Creating and refreshing swapchain are 2 different things
-                // For some reason, the AMD graphics card was not giving an error for this,
-                // but this behavior crashes the program on the NVIDIA GPU.
-                // Be careful about this operation.
-                // instance.swapchain_info = create_swapchain(
-                //     window.clone(),
-                //     instance.get_physical_device(),
-                //     instance.get_logical_device(),
-                //     instance.surface.clone(),
-                // );
-
-                // let dimensions = window.inner_size().into();
-                // let (new_swapchain, new_images) = instance
-                //     .swapchain_info
-                //     .swapchain
-                //     .recreate(SwapchainCreateInfo {
-                //         image_extent: dimensions,
-                //         ..instance.swapchain_info.swapchain.create_info()
-                //     })
-                //     .unwrap();
-
-                // instance.swapchain_info.swapchain = new_swapchain;
-                // instance.swapchain_info.images = new_images;
-
                 refresh_instance_swapchain(window.clone(), &mut instance);
 
                 // refreshing the render targets
@@ -681,11 +629,11 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
         vulkan_library,
         InstanceCreateInfo {
             enabled_extensions: required_extentions,
-            // max_api_version: Some(Version {
-            //     major: 1,
-            //     minor: 3,
-            //     ..Default::default()
-            // }),
+            max_api_version: Some(Version {
+                major: 1,
+                minor: 3,
+                ..Default::default()
+            }),
             ..Default::default()
         },
     )
@@ -701,17 +649,9 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
         ..Default::default()
     };
 
-    // 3 components to check for
-    // a. Swapchain support in window
-    // b. Surface support in device
-    // c. Queue family support in device queue
-
     let (physical_device, queue_family_index) = vulkan_instance
         .enumerate_physical_devices()
         .expect("Failed to enumerate physical devices")
-        // .filter(|p| {
-        //     p.api_version() >= Version::V1_3 || p.supported_extensions().khr_dynamic_rendering
-        // })
         .filter(|p| p.supported_extensions().contains(&device_extensions))
         .filter_map(|p| {
             p.queue_family_properties()
@@ -751,10 +691,6 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
                 ..Default::default()
             }],
             enabled_extensions: device_extensions,
-            // enabled_features: Features {
-            //     dynamic_rendering: true,
-            //     ..Features::empty()
-            // },
             ..Default::default()
         },
     )
@@ -772,6 +708,7 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
 
     let render_target_info =
         refresh_render_target(window.clone(), logical_device.clone(), &swapchain);
+
     let allocators = InstanceAllocators {
         command_buffer_allocator: create_command_buffer_allocator(logical_device.clone()),
         memory_allocator: create_buffer_allocator(logical_device.clone()),
@@ -791,19 +728,31 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
     // return (logical_device, device_queues, surface_swapchain);
 
     /*
-        FIXME:
-        TODO: Fix the steps and shift it to the top of the file
         Steps to initialise vulkan instance
 
-        Step 1. Query for the available physical devices based on the requirements
-        Step 2. Select a physical device to be used
-        Step 3. Create a Logical device based on the (VkQueue) queue types that we want to use
-        Step 4. Initialise the window for the application (using winit)
-        Step 5. Create a Vulkan Surface to render our graphics to which would be a reference to the current window
-        Step 6. Create a SwapChain to render our images to. This swapchain will then swap the images from
-        Step 7. Create command buffers
-        Step 8. Create Graphics pipeline
+        // Vulkan initialisation (PHASE 1)
+        Step 1. Initialise the window for the application (using winit)
+        Step 2. Initialise the vulkan instance
+        Step 3. Create Vulkan Surface to render our graphics to which would be a reference to the current window 
+            and acquired using the vulkan instance created
+        Step 4. Query for the available physical devices based on the requirements (support for swapchain extensions)
+        Step 5. Select a physical device to be used based on queue classes supported and support for swapchain
+        Step 6. Create a Logical device based on the (VkQueue) queue types that we want to use and get the first supported queue and its family index
+
+        // Render Target configs (PHASE 2) - Static Data, only changed on window events
+        Step 7. Create a SwapChain to render our images to and bind it to the acquired surface. 
+            This swapchain will then swap the images from the surface to render the images to the screen
+        Step 8. Create Render Pass, fbos, images and bind it all by creating the Graphics pipeline. Store the graphics pipeline and fbos
+            to be used later to construct command buffers
+        
+        // Dynamic targets (PHASE 3) - Dynamic data, can be different for each frame
         Step 9. Create the vertex and fragment shaders
+        Step 10. Create the vertex and index buffer to render primitives
+        Step 11. Create command buffers and bind the shaders, pipelines, fbos, VBs, IBs and uniforms to them
+        Step 12. Acquire the future by passing the command buffer into sync::now(), 
+            and execute the future to render the buffer to the binded swapchain image
+
+        TODO: In-Flight rendering
     */
 
     // Err("Failed to initialise vulkan runtime")
@@ -831,7 +780,7 @@ fn refresh_render_target(
 
     RenderTargetInfo {
         pipeline: graphics_pipeline,
-        render_pass: render_pass,
+        // render_pass: render_pass,
         fbos: fbos,
     }
 }
@@ -988,7 +937,8 @@ fn build_fbo_command_buffers_for_pipeline(
                     descriptor_set.clone(),
                 )
                 .unwrap()
-                .draw(vertex_count, 1, 0, 0)
+                // NOTE: This is the draw call used for indexed rendering
+                .draw_indexed(index_count, index_count / 3, 0, 0, 0)
                 .unwrap()
                 .end_render_pass(Default::default())
                 .unwrap();

@@ -51,13 +51,17 @@ pub mod fs {
             layout(location = 0) in vec3 color;
             layout(location = 1) in float v;
 
+            layout(set = 0, binding = 0) uniform Data {
+                float view;
+            } uniforms;
+
             layout(location = 0) out vec4 f_color;
     
             void main() {
                 float dist = normalize(gl_FragCoord.xy).y;
                 // f_color = vec4(1.0, dist, 0.0, 0.2);
                 // f_color = vec4(sin(v), dist, 0.0, 1);
-                f_color = vec4(color, dist);
+                f_color = vec4(color.x + sin(uniforms.view), color.y, color.z + cos(uniforms.view), dist);
             }
         ",
     );

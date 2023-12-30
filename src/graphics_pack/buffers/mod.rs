@@ -11,6 +11,9 @@ use self::primitives::VertexPoint;
 type GenericBufferAllocator =
     Arc<GenericMemoryAllocator<vulkano::memory::allocator::FreeListAllocator>>;
 
+// TODO: Implement staging buffers for vertex and index buffers
+
+
 // Helper function
 // fn create_buffer_from_iter<T, I>(
 fn create_buffer_from_vec<T>(
