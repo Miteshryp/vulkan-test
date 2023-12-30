@@ -1,12 +1,18 @@
-mod shaders;
-mod vertex;
+mod graphics_pack;
+// mod vertex;
 
-use shaders::fs;
+use graphics_pack::{
+    buffers::{
+        primitives::{Vec3, VertexPoint},
+        VertexBuffer, IndexBuffer
+    },
+    shaders::{self, fs},
+};
+
 use std::{
-    alloc::System,
     process::exit,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{SystemTime},
 };
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -16,8 +22,8 @@ use vulkano::{
         CommandBufferUsage, PrimaryAutoCommandBuffer,
     },
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferLevel, CopyImageToBufferInfo, RenderPassBeginInfo,
-        SubpassBeginInfo, SubpassContents,
+        allocator::CommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferLevel,
+        CopyImageToBufferInfo, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents,
     },
     descriptor_set::{
         allocator::StandardDescriptorSetAllocator, PersistentDescriptorSet, WriteDescriptorSet,
@@ -25,7 +31,7 @@ use vulkano::{
     device::{
         physical::{self, PhysicalDeviceType},
         Device, DeviceCreateInfo, DeviceExtensions, Properties, Queue, QueueCreateInfo,
-        QueueFamilyProperties, QueueFlags,
+        QueueFamilyProperties, QueueFlags, Features,
     },
     image::{view::ImageView, Image, ImageCreateInfo, ImageUsage},
     instance::InstanceCreateInfo,
@@ -36,10 +42,11 @@ use vulkano::{
         graphics::{
             self,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
+            depth_stencil,
             input_assembly::InputAssemblyState,
             vertex_input::{Vertex, VertexDefinition},
             viewport::{Viewport, ViewportState},
-            GraphicsPipelineCreateInfo, depth_stencil,
+            GraphicsPipelineCreateInfo,
         },
         layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo},
         GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout,
@@ -58,6 +65,8 @@ use winit::{
     platform::modifier_supplement::KeyEventExtModifierSupplement,
     window::{Window, WindowBuilder},
 };
+
+use crate::graphics_pack::buffers::{BufferOptions, BufferOps};
 
 // type name for buffer allocator
 type GenericBufferAllocator =
@@ -186,7 +195,7 @@ fn create_graphics_pipeline(
         .entry_point("main")
         .unwrap();
 
-    let vertex_shader_input_state = vertex::Vec3::per_vertex()
+    let vertex_shader_input_state = VertexPoint::per_vertex()
         .definition(&vertex_shader.info().input_interface)
         .unwrap();
 
@@ -252,7 +261,6 @@ fn create_graphics_pipeline(
 fn get_framebuffer_object(render_pass: Arc<RenderPass>, image: Arc<Image>) -> Arc<Framebuffer> {
     let view = ImageView::new_default(image.clone()).unwrap();
     // let depth_buffer = ImageView::new_default(vulkano::image::Image::s)
-    
 
     Framebuffer::new(
         render_pass,
@@ -377,7 +385,7 @@ fn create_window() -> (Arc<Window>, EventLoop<()>) {
     let winit_event_loop = event_loop::EventLoop::new().unwrap();
     let winit_window: Arc<Window> = Arc::new(
         WindowBuilder::new()
-            .with_transparent(true)
+            // .with_transparent(true)
             .build(&winit_event_loop)
             .unwrap(),
     );
@@ -390,57 +398,61 @@ fn create_window() -> (Arc<Window>, EventLoop<()>) {
 
 fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance: VulkanInstance) {
     let mut window_resized = false;
-    let mut recreate_swapchain = false;
+    let mut recreate_swapchain = true;
 
-    // let queue = instance.device_queues.iter().next().unwrap();
+    let color1 = Vec3 {
+        x: 1.0,
+        y: 0.0,
+        z: 0.0,
+    };
+    let color2 = Vec3 {
+        x: 0.0,
+        y: 1.0,
+        z: 0.0,
+    };
+    let color3 = Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 1.0,
+    };
 
     let vertices = Vec::from([
-        vertex::Vec3 { x: 0.0, y: -1.0, z: 0.3 },
-        vertex::Vec3 { x: -1.0, y: 1.0, z: 0.3 },
-        vertex::Vec3 { x: 1.0, y: 1.0, z: 0.3 },
-        vertex::Vec3 { x: -1.0, y: -1.0, z: 0.5 },
-        vertex::Vec3 { x: 0.0, y: 1.0, z: 0.5 },
-        vertex::Vec3 { x: 1.0, y: -1.0, z: 0.5 },
-
+        VertexPoint {
+            position: Vec3 {
+                x: -1.0,
+                y: -1.0,
+                z: 0.5,
+            },
+            color: color1.clone(),
+        },
+        VertexPoint {
+            position: Vec3 {
+                x: -1.0,
+                y: 1.0,
+                z: 0.5,
+            },
+            color: color2.clone(),
+        },
+        VertexPoint {
+            position: Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 0.5,
+            },
+            color: color2.clone(),
+        },
+        VertexPoint {
+            position: Vec3 {
+                x: 1.0,
+                y: -1.0,
+                z: 0.5,
+            },
+            color: color3.clone(),
+        }
     ]);
 
-    // // buffer allocator for memory buffer objects
-    // let memory_allocator: GenericBufferAllocator =
-    //     create_buffer_allocator(instance.get_logical_device());
-
-    // // let image_buffer = get_swapchain_image(device.clone());
-    // // let image_buffer = get_image_buffer(memory_allocator.clone());
-    // let vertex_buffer = create_buffer(
-    //     memory_allocator.clone(),
-    //     vertices.into_iter(),
-    //     BufferUsage::VERTEX_BUFFER,
-    //     MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-    // ); // data is streamed from CPU to GPU
-
-    // // TODO: Analyze the following step carefully and understand it more deeply
-    // let render_pass = create_render_pass(instance.get_logical_device()); // defines the schema information required for configuring the output of shaders to the framebuffer
-
-    // // Create a framebuffer for each swapchain image
-    // let fbos = instance
-    //     .swapchain_info
-    //     .images
-    //     .iter()
-    //     .map(|img| get_framebuffer_object(render_pass.clone(), img.clone()))
-    //     .collect();
-
-    // let graphics_pipeline =
-    //     create_graphics_pipeline(window.clone(), instance.get_logical_device(), render_pass);
-
-    // let command_buffers = get_command_buffers(
-    //     instance.get_logical_device(),
-    //     queue.clone(),
-    //     fbos,
-    //     graphics_pipeline,
-    //     vertex_buffer,
-    // );
-
-    let mut command_buffers = create_command_buffers(&instance, vertices.clone());
-    println!("First call");
+    let indicies: Vec<u32>= Vec::from([0,1,2,0,2,3]);
+    let mut command_buffers: Option<Vec<CommandBufferType>> = None;// = create_command_buffers(&instance, vertices.clone(), indicies.clone());
 
     el.set_control_flow(ControlFlow::Poll);
     let _ = el.run(move |app_event, elwt| match app_event {
@@ -461,8 +473,6 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
             if window_resized || recreate_swapchain {
                 // recreating swapchains
-
-                // TODO
                 instance.swapchain_info = create_swapchain(
                     window.clone(),
                     instance.get_physical_device(),
@@ -476,12 +486,12 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                     instance.get_logical_device(),
                     &instance.swapchain_info,
                 );
-
+                // recreating the render pass, fbos, pipeline and command buffers with the new swapchain images
+                command_buffers = Some(create_command_buffers(&instance, vertices.clone(), indicies.clone()));
             }
-            // recreating the render pass, fbos, pipeline and command buffers with the new swapchain images
-            command_buffers = create_command_buffers(&instance, vertices.clone());
 
-            
+            println!("Build command buffers");
+
             let (image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
                 instance.swapchain_info.swapchain.clone(),
                 None,
@@ -501,7 +511,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                 .join(acquired_future)
                 .then_execute(
                     instance.get_first_queue(),
-                    command_buffers[image_index as usize].clone(),
+                    command_buffers.as_ref().unwrap()[image_index as usize].clone(),
                 )
                 .unwrap()
                 .then_swapchain_present(
@@ -627,11 +637,11 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
         vulkan_library,
         InstanceCreateInfo {
             enabled_extensions: required_extentions,
-            max_api_version: Some(Version {
-                major: 1,
-                minor: 1,
-                ..Default::default()
-            }),
+            // max_api_version: Some(Version {
+            //     major: 1,
+            //     minor: 3,
+            //     ..Default::default()
+            // }),
             ..Default::default()
         },
     )
@@ -655,6 +665,9 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
     let (physical_device, queue_family_index) = vulkan_instance
         .enumerate_physical_devices()
         .expect("Failed to enumerate physical devices")
+        // .filter(|p| {
+        //     p.api_version() >= Version::V1_3 || p.supported_extensions().khr_dynamic_rendering
+        // })
         .filter(|p| p.supported_extensions().contains(&device_extensions))
         .filter_map(|p| {
             p.queue_family_properties()
@@ -664,7 +677,7 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
                     // Checking for proper support of
                     // 1. Surface support for the created surface
                     // 2. Required Queue family availability
-                    q.queue_flags.contains(QueueFlags::GRAPHICS)
+                    q.queue_flags.intersects(QueueFlags::GRAPHICS)
                         && p.surface_support(i as u32, &surface).unwrap_or(false)
                 })
                 .map(|queue_index| (p, queue_index))
@@ -683,8 +696,6 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
         physical_device.properties().device_name
     );
 
-    let physical_device_properties: &Properties = physical_device.properties();
-
     /*
     Creating Logical Device
     */
@@ -696,6 +707,10 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
                 ..Default::default()
             }],
             enabled_extensions: device_extensions,
+            // enabled_features: Features {
+            //     dynamic_rendering: true,
+            //     ..Features::empty()
+            // },
             ..Default::default()
         },
     )
@@ -750,14 +765,13 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
     // Ok(())
 }
 
-static mut start: Option<SystemTime> = None;
+static mut START: Option<SystemTime> = None;
 
 fn refresh_render_target(
     window: Arc<Window>,
     device: Arc<Device>,
     swapchain_info: &VulkanSwapchainInfo,
 ) -> RenderTargetInfo {
-    // TODO: Analyze the following step carefully and understand it more deeply
     let render_pass = create_render_pass(device.clone(), swapchain_info); // defines the schema information required for configuring the output of shaders to the framebuffer
 
     // Create a framebuffer for each swapchain image
@@ -787,27 +801,30 @@ fn refresh_render_target(
 fn create_command_buffers(
     // window: Arc<Window>,
     instance: &VulkanInstance,
-    vertices: Vec<vertex::Vec3>,
+    vertices: Vec<VertexPoint>,
+    indicies: Vec<u32>
 ) -> Vec<CommandBufferType> {
+
     // buffer allocator for memory buffer objects
-    // let memory_allocator: GenericBufferAllocator =
-    //     create_buffer_allocator(instance.get_logical_device());
     let memory_allocator = instance.allocators.memory_allocator.clone();
 
-    // let image_buffer = get_swapchain_image(device.clone());
-    // let image_buffer = get_image_buffer(memory_allocator.clone());
-    let vertex_buffer = create_buffer_from_iter(
-        memory_allocator.clone(),
-        vertices.into_iter(),
-        BufferUsage::VERTEX_BUFFER,
-        MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-    ); // data is streamed from CPU to GPU
+    let vertex_buffer = graphics_pack::buffers::VertexBuffer::new(
+        instance.allocators.memory_allocator.clone(),
+        vertices,
+        Default::default(),
+    );
+
+    let index_buffer: IndexBuffer = graphics_pack::buffers::IndexBuffer::new(
+        instance.allocators.memory_allocator.clone(),
+        indicies,
+        Default::default()
+    );
 
     // let depth_stencil_buffer = Buffer::from(value)
 
     let mut f = 0.0;
     unsafe {
-        f = start.unwrap().elapsed().unwrap().as_secs_f32() as f32; //std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as f32;
+        f = START.unwrap().elapsed().unwrap().as_secs_f32() as f32; //std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as f32;
     }
     println!("{f}");
     let uniform_buffer = create_buffer_from_data(
@@ -818,12 +835,13 @@ fn create_command_buffers(
     );
 
     let command_buffers = build_fbo_command_buffers_for_pipeline(
-        // instance.get_logical_device(),
-        // instance.get_first_queue(),
-        // &instance.render_target.fbos,
-        // instance.get_graphics_pipeline(),
-        instance,
+        instance.get_logical_device(),
+        instance.allocators.command_buffer_allocator.clone(),
+        instance.get_first_queue(),
+        instance.get_graphics_pipeline(),
+        &instance.render_target.fbos,
         vertex_buffer,
+        index_buffer,
         uniform_buffer,
     );
 
@@ -831,9 +849,26 @@ fn create_command_buffers(
 }
 
 // Only builds the command buffers
+
+// Components required:
+// 1. Logical device
+// 2. Command buffer allocator
+// 3. Physical device queue (to get queue index)
+// 4. Graphics pipeline instance
+// 5. Frame buffer array
+// 6. vertex_buffer
+// 7. uniform_buffer
 fn build_fbo_command_buffers_for_pipeline(
-    instance: &VulkanInstance,
-    vertex_buffer: Subbuffer<[vertex::Vec3]>,
+    // instance: &VulkanInstance,
+    logical_device: Arc<Device>,
+    cb_allocator: Arc<StandardCommandBufferAllocator>,
+    queue: Arc<Queue>,
+    graphics_pipeline: Arc<GraphicsPipeline>,
+    fbos: &Vec<Arc<Framebuffer>>,
+
+    // vertex_buffer: Subbuffer<[vertex::VertexPoint]>,
+    vertex_buffer: VertexBuffer,
+    index_buffer: IndexBuffer,
     uniform_buffer: Subbuffer<shaders::vs::Data>,
 ) -> Vec<CommandBufferType> {
     // I need:
@@ -841,17 +876,13 @@ fn build_fbo_command_buffers_for_pipeline(
     // render pass created for data
     // FBO - done
     // graphics pipeline object
-    // let cb_allocator = create_command_buffer_allocator(instance.get_logical_device().clone());
-    let cb_allocator = &instance.allocators.command_buffer_allocator;
 
-    // let queue_family_index = queue.queue_family_index();
-    let queue_family_index = instance.get_first_queue().queue_family_index();
-    let pipeline = instance.get_graphics_pipeline();
+    let queue_family_index = queue.queue_family_index();
 
     let descriptor_set_index: usize = 0;
     let descriptor_set_allocator =
-        StandardDescriptorSetAllocator::new(instance.get_logical_device(), Default::default());
-    let descriptor_set_layout = pipeline
+        StandardDescriptorSetAllocator::new(logical_device, Default::default());
+    let descriptor_set_layout = graphics_pipeline
         .layout()
         .set_layouts()
         .get(descriptor_set_index)
@@ -865,17 +896,29 @@ fn build_fbo_command_buffers_for_pipeline(
     )
     .unwrap();
 
-    let fbos = &instance.render_target.fbos;
+    // let fbos = &instance.render_target.fbos;
+
+    println!("Fine till here");
 
     fbos.into_iter()
-        .map(|fb| {
+        .map(move |fb| {
             let mut command_builder = AutoCommandBufferBuilder::primary(
-                cb_allocator,
+                &cb_allocator,
                 queue_family_index,
                 CommandBufferUsage::OneTimeSubmit,
             )
             .unwrap();
 
+            // FIXME: we are doing redundant copies for every framebuffer anyways
+            let temp_vertex_buffer = vertex_buffer.clone();
+            let (vertex_subbuffer, vertex_count) = temp_vertex_buffer.consume();
+
+            let temp_index_buffer = index_buffer.clone();
+            let (index_subbuffer, index_count) = temp_index_buffer.consume();
+
+            // TODO: vertex and instance count are hardcoded.
+            // Create rendering structure to parameterize them
+            // based on the size of vertex buffer.
             command_builder
                 .begin_render_pass(
                     RenderPassBeginInfo {
@@ -888,62 +931,29 @@ fn build_fbo_command_buffers_for_pipeline(
                     },
                 )
                 .unwrap()
-                .bind_pipeline_graphics(instance.get_graphics_pipeline())
+                .bind_index_buffer(index_subbuffer)
+                .unwrap()
+                .bind_vertex_buffers(0, vertex_subbuffer)
+                .unwrap()
+                .bind_pipeline_graphics(graphics_pipeline.clone())
                 .unwrap()
                 .bind_descriptor_sets(
                     PipelineBindPoint::Graphics,
-                    instance.get_graphics_pipeline().layout().clone(),
+                    graphics_pipeline.clone().layout().clone(),
                     0,
                     descriptor_set.clone(),
                 )
                 .unwrap()
-                .bind_vertex_buffers(0, vertex_buffer.clone())
-                .unwrap()
-                .draw(3, 1, 0, 0)
+                .draw(vertex_count, 1, 0, 0)
                 .unwrap()
                 .end_render_pass(Default::default())
                 .unwrap();
-
-            // Removing this since we no longer need to copy the image data into a buffer since we are not saving the image anymore
-            // .copy_image_to_buffer(CopyImageToBufferInfo::image_buffer(
-            //     framebuffer_object_image,
-            //     target_buffer.clone(),
-            // ))
-            // .unwrap_or_else(|err| panic!("Failed to copy image to buffer: {:?}", err));
 
             let cb = command_builder.build().unwrap();
             return cb;
         })
         .collect()
-
-    // let future = sync::now(device.clone())
-    //     .then_execute(queue, command_buffer)
-    //     .unwrap()
-    //     .then_signal_fence_and_flush()
-    //     .unwrap();
-
-    // future.wait(None).unwrap();
 }
-
-// fn get_swapchain_image(device: Arc<Device>) -> _ {
-//     todo!()
-// }
-
-// fn get_auto_command_buffer_builder(
-//     cb_allocator: &StandardCommandBufferAllocator,
-//     queue_family_index: u32,
-// ) -> AutoCommandBufferBuilder<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
-//     let mut cb_builder: AutoCommandBufferBuilder<
-//         vulkano::command_buffer::PrimaryAutoCommandBuffer,
-//     > = AutoCommandBufferBuilder::primary(
-//         cb_allocator,
-//         queue_family_index,
-//         CommandBufferUsage::OneTimeSubmit,
-//     )
-//     .unwrap();
-
-//     return cb_builder;
-// }
 
 fn get_image_buffer(allocator: GenericBufferAllocator) -> Arc<vulkano::image::Image> {
     vulkano::image::Image::new(
@@ -964,57 +974,30 @@ fn get_image_buffer(allocator: GenericBufferAllocator) -> Arc<vulkano::image::Im
     .unwrap()
 }
 
+// ISSUE
+// 1. We are unable to pass uniforms directly into the fragment shader
+//      It results in the error: create_info.pool_sizes is empty
+// 2. Depth stencil buffer is not setup. vertices are rendered in the order
+//      that they are given
+
+/*
+   Steps to setup stencil buffer
+
+   create a depth image.
+   update the render pass.
+   set a new depth stencil state in the pipeline.
+   update the framebuffers.
+   update draw function.
+   clean.
+*/
+
 fn main() {
     unsafe {
-        start = Some(SystemTime::now());
+        START = Some(SystemTime::now());
     }
 
     let (window, elwt) = create_window();
     let mut vulkan_instance: VulkanInstance = initialise_vulkan_runtime(window.clone(), &elwt);
-
-    // let device = vulkan_instance.logical;
-    // let queues = vulkan_instance.device_queues;
-
-    // let use_queue = queues.iter().next().unwrap();
-
-    // let vertices = Vec::from([
-    //     vertex::Vec2 { x: 0.0, y: 1.0 },
-    //     vertex::Vec2 { x: -1.0, y: -1.0 },
-    //     vertex::Vec2 { x: 1.0, y: -1.0 },
-    // ]);
-
-    // // buffer allocator for memory buffer objects
-    // let memory_allocator: GenericBufferAllocator = create_buffer_allocator(device.clone());
-
-    // // let image_buffer = get_swapchain_image(device.clone());
-    // // let image_buffer = get_image_buffer(memory_allocator.clone());
-    // let vertex_buffer = create_buffer(
-    //     memory_allocator.clone(),
-    //     vertices.into_iter(),
-    //     BufferUsage::VERTEX_BUFFER,
-    //     MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-    // ); // data is streamed from CPU to GPU
-
-    // // TODO: Analyze the following step carefully and understand it more deeply
-    // let render_pass = create_render_pass(device.clone()); // defines the schema information required for configuring the output of shaders to the framebuffer
-
-    // // Create a framebuffer for each swapchain image
-    // let fbos = vulkan_instance
-    //     .swapchain_info
-    //     .images
-    //     .iter()
-    //     .map(|&img| get_framebuffer_object(render_pass.clone(), img))
-    //     .collect();
-
-    // let graphics_pipeline = create_graphics_pipeline(window.clone(), device.clone(), render_pass);
-
-    // let command_buffers = get_command_buffers(
-    //     device.clone(),
-    //     use_queue.clone(),
-    //     fbos,
-    //     graphics_pipeline,
-    //     vertex_buffer,
-    // );
 
     start_window_event_loop(window.clone(), elwt, vulkan_instance);
 }
