@@ -31,18 +31,18 @@ use vulkano::{
     },
     image::{view::ImageView, Image, ImageCreateInfo, ImageUsage},
     instance::InstanceCreateInfo,
-    memory::allocator::{
+    memory::{allocator::{
         AllocationCreateInfo, GenericMemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
-    },
+    }, MemoryType},
     pipeline::{
         graphics::{
             self,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
-            depth_stencil,
+            depth_stencil::{self, DepthStencilState, StencilState, DepthState},
             input_assembly::InputAssemblyState,
             vertex_input::{Vertex, VertexDefinition},
             viewport::{Viewport, ViewportState},
-            GraphicsPipelineCreateInfo,
+            GraphicsPipelineCreateInfo, rasterization::{RasterizationState, FrontFace},
         },
         layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo},
         GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout,
@@ -97,8 +97,8 @@ struct VulkanSwapchainInfo {
 }
 
 impl VulkanInstance {
-    fn initialise(&mut self, window: Arc<Window>, eltw: &EventLoop<()>) {
-        todo!()
+    fn initialise(window: Arc<Window>, eltw: &EventLoop<()>) -> Self {
+        initialise_vulkan_runtime(window, eltw)
     }
 
     fn get_device_type(&self) -> PhysicalDeviceType {
@@ -161,17 +161,17 @@ fn create_render_pass(
                 store_op: Store,
             },
 
-            // depth: {
-            //     format: vulkano::format::Format::D16_UNORM,
-            //     samples: 1,
-            //     load_op: Clear,
-            //     store_op: DontCare
-            // }
+            depth: {
+                format: vulkano::format::Format::D16_UNORM,
+                samples: 1,
+                load_op: Clear,
+                store_op: DontCare
+            }
         },
         pass: {
             color: [color],
-            depth_stencil: {}
-            // depth_stencil: {depth},
+            // depth_stencil: {}
+            depth_stencil: {depth},
         },
     )
     .unwrap()
@@ -213,6 +213,13 @@ fn create_graphics_pipeline(
     )
     .unwrap();
 
+    let depth_stencil = depth_stencil::DepthState::simple();
+    let rasterization_state_info: RasterizationState = RasterizationState {
+        cull_mode: graphics::rasterization::CullMode::Back,
+        front_face: FrontFace::CounterClockwise,
+        ..Default::default()
+    };
+
     GraphicsPipeline::new(
         logical_device,
         None,
@@ -239,7 +246,13 @@ fn create_graphics_pipeline(
             // describes drawing primitives, default is a triangle
             input_assembly_state: Some(InputAssemblyState::default()),
 
-            rasterization_state: Some(Default::default()),
+            depth_stencil_state: Some(DepthStencilState {
+                depth: Some(depth_stencil),
+                ..Default::default()
+            }),
+
+            // rasterization_state: Some(Default::default()),
+            rasterization_state: Some(rasterization_state_info),
             multisample_state: Some(Default::default()),
             color_blend_state: Some(ColorBlendState::with_attachment_states(
                 subpass.num_color_attachments(),
@@ -255,14 +268,15 @@ fn create_graphics_pipeline(
     .unwrap()
 }
 
-fn get_framebuffer_object(render_pass: Arc<RenderPass>, image: Arc<Image>) -> Arc<Framebuffer> {
+fn get_framebuffer_object(render_pass: Arc<RenderPass>, image: Arc<Image>, depth_stencil_image: Arc<Image>) -> Arc<Framebuffer> {
+
     let view = ImageView::new_default(image.clone()).unwrap();
-    // let depth_buffer = ImageView::new_default(vulkano::image::Image::s)
+    let depth_stencil_view = ImageView::new_default(depth_stencil_image.clone()).unwrap();
 
     Framebuffer::new(
         render_pass,
         FramebufferCreateInfo {
-            attachments: vec![view],
+            attachments: vec![view, depth_stencil_view],
             ..Default::default()
         },
     )
@@ -416,13 +430,13 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             position: Vec3 {
                 x: 1.0,
                 y: -1.0,
-                z: 0.5,
+                z: 1.0,
             },
             color: color3.clone(),
         },
     ]);
 
-    let indicies: Vec<u32> = Vec::from([0, 1, 2, 0, 2, 3]);
+    let indicies: Vec<u32> = Vec::from([0, 1, 2, 1, 2, 3]);
     let mut command_buffers = create_command_buffers(&instance, vertices.clone(), indicies.clone());
 
     el.set_control_flow(ControlFlow::Poll);
@@ -439,11 +453,9 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             event: WindowEvent::RedrawRequested,
             ..
         } => {
-            println!("Redrawing");
             // draw call
 
             if window_resized || recreate_swapchain {
-                println!("Instance surface: {:?}", instance.surface);
                 // recreating swapchains
                 refresh_instance_swapchain(window.clone(), &mut instance);
 
@@ -453,6 +465,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                     window.clone(),
                     instance.get_logical_device(),
                     &instance.swapchain_info,
+                    instance.allocators.memory_allocator.clone()
                 );
 
                 window_resized = false;
@@ -460,7 +473,6 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             }
             command_buffers = create_command_buffers(&instance, vertices.clone(), indicies.clone());
 
-            println!("Build command buffers");
 
             let (image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
                 instance.swapchain_info.swapchain.clone(),
@@ -704,15 +716,14 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
         surface.clone(),
     );
 
-    // TODO: Explore graphics pipeline or command builder extensibilities
-
-    let render_target_info =
-        refresh_render_target(window.clone(), logical_device.clone(), &swapchain);
-
     let allocators = InstanceAllocators {
         command_buffer_allocator: create_command_buffer_allocator(logical_device.clone()),
         memory_allocator: create_buffer_allocator(logical_device.clone()),
     };
+
+    let render_target_info =
+        refresh_render_target(window.clone(), logical_device.clone(), &swapchain, allocators.memory_allocator.clone());
+
 
     VulkanInstance {
         logical: logical_device,
@@ -765,14 +776,32 @@ fn refresh_render_target(
     window: Arc<Window>,
     device: Arc<Device>,
     swapchain_info: &VulkanSwapchainInfo,
+    allocator: GenericBufferAllocator
 ) -> RenderTargetInfo {
     let render_pass = create_render_pass(device.clone(), swapchain_info); // defines the schema information required for configuring the output of shaders to the framebuffer
+    
+    let depth_image = Image::new(
+        allocator.clone(),
+        ImageCreateInfo {
+            // image_type: vulkano::image::ImageType::Dim1d,
+            usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
+            stencil_usage: Some(ImageUsage::DEPTH_STENCIL_ATTACHMENT),
+            format: vulkano::format::Format::D16_UNORM,
+            extent: [window.inner_size().width, window.inner_size().height, 1],
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+            ..Default::default()
+        }
+    ).unwrap();
+
 
     // Create a framebuffer for each swapchain image
     let fbos: Vec<Arc<Framebuffer>> = swapchain_info
         .images
         .iter()
-        .map(|img| get_framebuffer_object(render_pass.clone(), img.clone()))
+        .map(|img| get_framebuffer_object(render_pass.clone(), img.clone(), depth_image.clone()))
         .collect();
 
     let graphics_pipeline =
@@ -842,15 +871,6 @@ fn create_command_buffers(
 }
 
 // Only builds the command buffers
-
-// Components required:
-// 1. Logical device
-// 2. Command buffer allocator
-// 3. Physical device queue (to get queue index)
-// 4. Graphics pipeline instance
-// 5. Frame buffer array
-// 6. vertex_buffer
-// 7. uniform_buffer
 fn build_fbo_command_buffers_for_pipeline(
     // instance: &VulkanInstance,
     logical_device: Arc<Device>,
@@ -891,7 +911,6 @@ fn build_fbo_command_buffers_for_pipeline(
 
     // let fbos = &instance.render_target.fbos;
 
-    println!("Fine till here");
 
     fbos.into_iter()
         .map(move |fb| {
@@ -909,13 +928,13 @@ fn build_fbo_command_buffers_for_pipeline(
             let temp_index_buffer = index_buffer.clone();
             let (index_subbuffer, index_count) = temp_index_buffer.consume();
 
-            // TODO: vertex and instance count are hardcoded.
-            // Create rendering structure to parameterize them
-            // based on the size of vertex buffer.
+            // NOTE: This structure is only used to bind dynamic data to the graphics pipeline
+            // Any modifications to the rendering stages have to be done in the 
+            // graphics pipeline while it is created.
             command_builder
                 .begin_render_pass(
                     RenderPassBeginInfo {
-                        clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())],
+                        clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into()), Some(1.0.into())],
                         ..RenderPassBeginInfo::framebuffer(fb.clone())
                     },
                     SubpassBeginInfo {
@@ -924,11 +943,11 @@ fn build_fbo_command_buffers_for_pipeline(
                     },
                 )
                 .unwrap()
+                .bind_pipeline_graphics(graphics_pipeline.clone())
+                .unwrap()
                 .bind_index_buffer(index_subbuffer)
                 .unwrap()
                 .bind_vertex_buffers(0, vertex_subbuffer)
-                .unwrap()
-                .bind_pipeline_graphics(graphics_pipeline.clone())
                 .unwrap()
                 .bind_descriptor_sets(
                     PipelineBindPoint::Graphics,
@@ -949,24 +968,24 @@ fn build_fbo_command_buffers_for_pipeline(
         .collect()
 }
 
-fn get_image_buffer(allocator: GenericBufferAllocator) -> Arc<vulkano::image::Image> {
-    vulkano::image::Image::new(
-        allocator.clone(),
-        vulkano::image::ImageCreateInfo {
-            image_type: vulkano::image::ImageType::Dim2d,
-            format: vulkano::format::Format::R8G8B8A8_UNORM,
-            extent: [1024, 1024, 1],
-            usage: vulkano::image::ImageUsage::COLOR_ATTACHMENT
-                | vulkano::image::ImageUsage::TRANSFER_SRC,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-            ..Default::default()
-        },
-    )
-    .unwrap()
-}
+// fn get_image_buffer(allocator: GenericBufferAllocator) -> Arc<vulkano::image::Image> {
+//     vulkano::image::Image::new(
+//         allocator.clone(),
+//         vulkano::image::ImageCreateInfo {
+//             image_type: vulkano::image::ImageType::Dim2d,
+//             format: vulkano::format::Format::R8G8B8A8_UNORM,
+//             extent: [1024, 1024, 1],
+//             usage: vulkano::image::ImageUsage::COLOR_ATTACHMENT
+//                 | vulkano::image::ImageUsage::TRANSFER_SRC,
+//             ..Default::default()
+//         },
+//         AllocationCreateInfo {
+//             memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+//             ..Default::default()
+//         },
+//     )
+//     .unwrap()
+// }
 
 // ISSUE
 // 1. We are unable to pass uniforms directly into the fragment shader
@@ -993,7 +1012,6 @@ fn main() {
     let (window, elwt) = create_window();
     let mut vulkan_instance: VulkanInstance = initialise_vulkan_runtime(window.clone(), &elwt);
 
-    println!("First initialisation successful");
 
     start_window_event_loop(window.clone(), elwt, vulkan_instance);
 }

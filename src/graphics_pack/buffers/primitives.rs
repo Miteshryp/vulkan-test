@@ -1,15 +1,17 @@
 use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex};
+// use nalgebra_glm::{Vec3, vec3};
 
-#[derive(BufferContents, Vertex, Clone)]
-#[repr(C)]
+// TODO: Integrate the vertex data with nalgebra library
+// #[derive(BufferContents, Vertex, Clone)]
+// #[repr(C)]
 
-pub struct Vec2 {
-    #[format(R32_SFLOAT)] // single f32 value
-    pub x: f32,
+// pub struct Vec2 {
+//     #[format(R32_SFLOAT)] // single f32 value
+//     pub x: f32,
 
-    #[format(R32_SFLOAT)] // single f32 value
-    pub y: f32,
-}
+//     #[format(R32_SFLOAT)] // single f32 value
+//     pub y: f32,
+// }
 
 #[derive(BufferContents, Clone, Vertex, Debug)]
 #[repr(C)]
@@ -21,8 +23,12 @@ pub struct VertexPoint {
     pub color: Vec3
 }
 
-impl VertexPoint {
-}
+// impl VertexPoint {
+//     fn test() {
+//         let v = vec3(1.0, 1.0, 1.0);
+//         let k: [f32; 3] = v.into();
+//     }
+// }
 
 #[derive(BufferContents, Clone, Debug)]
 // #[derive(Clone)]
