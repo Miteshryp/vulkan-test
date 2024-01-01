@@ -1,15 +1,18 @@
 
 # TODAY's GOALS
-[x] Intergrate the depth stencil buffer
-[x] Integrate cull mode in graphics pipeline
-[] Texture rendering in shaders
-[] Think about a way to streamline descriptor sets
+[x] Think about a way to streamline descriptor sets
+
+[] MVP matrix integration
+    - [] nalgebra integration
+    - [] vulkan pushconstants
+
 
 
 # FUTURE GOALS
-[] MVP matrix integration
+[] Multipass / Deffered rendering
 [] Instanced Rendering
 [] Different types of lighting
+[] Texture rendering in shaders
 [] Dynamic shader loading
 
 
@@ -20,7 +23,8 @@
 [] Explore the vulkan and SPIR-V sdk tools
 [] Explore NVRHI
 
-
+# WORKAROUNDS
+- [] Renderdoc integration for shader debugging - FAILED (binding not working with renderdoc 1.30)
 
 
 ## RESOURCES
