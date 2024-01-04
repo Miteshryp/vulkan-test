@@ -15,6 +15,7 @@ struct FragmentShader {
     src: String
 }
 
+
 pub mod vs {
     vulkano_shaders::shader!(
         ty: "vertex",
@@ -24,6 +25,12 @@ pub mod vs {
             layout(set = 0, binding = 0) uniform Data {
                 float view;
             } uniforms;
+
+            layout(set = 0, binding = 1) uniform MvpMatrix {
+                mat4 model;
+                mat4 view;
+                mat4 projection;
+            } mvp;
     
     
             layout(location = 0) in vec3 position;
@@ -33,7 +40,7 @@ pub mod vs {
             layout(location = 1) out float v;
             
             void main() {
-                gl_Position = vec4(position.xyz, 1.0);
+                gl_Position = mvp.model * vec4(position.xyz, 1.0);
                 out_color = color;
                 v = uniforms.view;
             }
@@ -54,6 +61,12 @@ pub mod fs {
             layout(set = 0, binding = 0) uniform Data {
                 float view;
             } uniforms;
+
+            layout(set = 0, binding = 1) uniform MvpMatrix {
+                mat4 model;
+                mat4 view;
+                mat4 projection;
+            } mvp;
 
             layout(location = 0) out vec4 f_color;
     

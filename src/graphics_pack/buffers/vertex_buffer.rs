@@ -6,7 +6,7 @@ use vulkano::{
 use crate::graphics_pack::buffers::{
     base_buffer::{
         self,
-        BufferVec, GenericBufferAllocator, BufferOptions, BufferOps
+        VecBuffer, GenericBufferAllocator, BufferOptions, VecBufferOps
     },
     primitives::{
         VertexPoint
@@ -16,11 +16,11 @@ use crate::graphics_pack::buffers::{
 
 #[derive(Clone)]
 pub struct VertexBuffer {
-    pub buffer: BufferVec<VertexPoint>,
+    pub buffer: VecBuffer<VertexPoint>,
     pub vertices: u32,
 }
 
-impl BufferOps<VertexPoint> for VertexBuffer {
+impl VecBufferOps<VertexPoint> for VertexBuffer {
     type BufferAllocator = GenericBufferAllocator;
 
     fn from_vec(
@@ -37,7 +37,7 @@ impl BufferOps<VertexPoint> for VertexBuffer {
         );
 
         Some(VertexBuffer {
-            buffer: BufferVec {
+            buffer: VecBuffer {
                 raw_buffer: buffer,
                 options: options,
             },

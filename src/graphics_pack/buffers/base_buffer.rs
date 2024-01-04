@@ -85,7 +85,7 @@ where
 
 // Bare bones structure for sub buffer storage
 #[derive(Clone)]
-pub struct BufferVec<T>
+pub struct VecBuffer<T>
 where
     T: BufferContents
 {
@@ -101,7 +101,7 @@ where
     pub options: BufferOptions
 }
 
-pub trait BufferOps<T> 
+pub trait VecBufferOps<T> 
 {
 
     type BufferAllocator;

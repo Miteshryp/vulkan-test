@@ -1,8 +1,7 @@
 
 # TODAY's GOALS
-[x] Think about a way to streamline descriptor sets
 
-[] MVP matrix integration
+[] Model View Projection matrix integration
     - [] nalgebra integration
     - [] vulkan pushconstants
 
