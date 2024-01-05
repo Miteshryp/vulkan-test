@@ -6,9 +6,9 @@ use nalgebra_glm as glm;
 use graphics_pack::{
     buffers::{
         self,
-        base_buffer::{self, VecBufferOps, BufferOptions},
+        base_buffer::{self, BufferOptions, VecBufferOps},
         primitives::{Vec3, VertexPoint},
-        IndexBuffer, UniformBuffer, VertexBuffer, UniformSet,
+        IndexBuffer, UniformBuffer, UniformSet, VertexBuffer,
     },
     shaders::{self, fs},
 };
@@ -26,7 +26,8 @@ use vulkano::{
         CopyImageToBufferInfo, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents,
     },
     descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, PersistentDescriptorSet, WriteDescriptorSet, persistent,
+        allocator::StandardDescriptorSetAllocator, persistent, PersistentDescriptorSet,
+        WriteDescriptorSet,
     },
     device::{
         physical::{self, PhysicalDeviceType},
@@ -217,24 +218,20 @@ fn create_graphics_pipeline(
 
     let window_size = window.inner_size();
 
-
     // PipelineLayoutCreateInfo
-    let mut descriptor_create_info = 
+    let mut descriptor_create_info =
         PipelineDescriptorSetLayoutCreateInfo::from_stages(&pipeline_stages)
-        // PipelineDescriptorSetLayoutCreateInfo::
+            // PipelineDescriptorSetLayoutCreateInfo::
             .into_pipeline_layout_create_info(logical_device.clone())
             .unwrap();
-    
+
     // descriptor_create_info.set_layouts = descriptor_create_info.set_layouts.into_iter().map(|layout| {
     //     layout.
     // }).collect();
 
     // ERROR: from_stages is setting descriptor set count to 1
-    let pipeline_layout = PipelineLayout::new(
-        logical_device.clone(),
-        descriptor_create_info
-    )
-    .unwrap();
+    let pipeline_layout =
+        PipelineLayout::new(logical_device.clone(), descriptor_create_info).unwrap();
 
     let depth_stencil = depth_stencil::DepthState::simple();
     let rasterization_state_info: RasterizationState = RasterizationState {
@@ -335,7 +332,12 @@ where
 
 #[allow(unused_variables)]
 #[allow(unused_assignments)]
-fn winit_handle_window_events(event: WindowEvent, window_target: &EventLoopWindowTarget<()>) {
+fn winit_handle_window_events(
+    event: WindowEvent,
+    window_target: &EventLoopWindowTarget<()>,
+    // view_matrix: &mut glm::TMat4<f32>,
+    camera: &mut glm::TVec3<f32>
+) {
     let mut modifiers = ModifiersState::default();
 
     match event {
@@ -373,15 +375,19 @@ fn winit_handle_window_events(event: WindowEvent, window_target: &EventLoopWindo
             ElementState::Pressed => match key_event.key_without_modifiers().as_ref() {
                 Key::Character("w") => {
                     println!("Forward");
+                    unsafe {camera.z -= MOVE_SPEED; }
                 }
                 Key::Character("a") => {
                     println!("Left");
+                    unsafe {camera.x -= MOVE_SPEED; }
                 }
                 Key::Character("s") => {
                     println!("Backward");
+                    unsafe {camera.z += MOVE_SPEED; }
                 }
                 Key::Character("d") => {
                     println!("Right");
+                    unsafe {camera.x += MOVE_SPEED; }
                 }
                 _ => (),
             },
@@ -431,8 +437,8 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
         VertexPoint {
             position: Vec3 {
                 x: -1.0,
-                y: -1.0,
-                z: 0.5,
+                y: -0.9,
+                z: -0.5,
             },
             color: color1.clone(),
         },
@@ -440,7 +446,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             position: Vec3 {
                 x: -1.0,
                 y: 1.0,
-                z: 0.5,
+                z: -0.5,
             },
             color: color2.clone(),
         },
@@ -448,7 +454,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             position: Vec3 {
                 x: 1.0,
                 y: 1.0,
-                z: 0.5,
+                z: -0.5,
             },
             color: color2.clone(),
         },
@@ -456,111 +462,19 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             position: Vec3 {
                 x: 1.0,
                 y: -1.0,
-                z: 1.0,
+                z: -0.5,
             },
             color: color3.clone(),
         },
-    ]);
-
-    let indicies: Vec<u32> = Vec::from([0, 1, 2, 1, 2, 3]);
-    // let mut uniform_data1 = shaders::vs::Data {
-    //     view: unsafe { START.unwrap().elapsed().unwrap().as_secs_f32() }
-    // };
-
-    // let mut uniform_set = UniformSet::new(0);
-    
-
-    // // Data for uniform 0
-    // {
-    //     let mut data = shaders::vs::Data {
-    //         view: unsafe { START.unwrap().elapsed().unwrap().as_secs_f32() }
-    //     };
-
-    //     uniform_set.add_uniform_buffer(
-    //         instance.allocators.memory_allocator.clone(),
-    //         instance.get_graphics_pipeline(),
-    //         data,
-    // Default::default()
-    //     );
-    // }
-
-
-    // Data for uniform 1
-    let mut model = glm::identity::<f32, 4>();
-    let mut view = glm::look_at(
-        &glm::vec3(0.0, 0.0, 0.0),
-        &glm::vec3(0.0,0.0,1.0),
-        &glm::vec3(0.0,1.0,0.0)
-    );
-
-    let projection = glm::perspective(
-        16.0/9.0,
-        std::f32::consts::PI / 4.0,
-        0.0,
-        1000.0);
-
-    // {
-    //     let mut data = shaders::vs::MvpMatrix {
-    //         model: Into::<[[f32; 4]; 4]>::into(model),
-    //         view: Into::<[[f32; 4]; 4]>::into(view),
-    //         projection: Into::<[[f32; 4]; 4]>::into(projection),
-    //     };
-
-    
-    //     uniform_set.add_uniform_buffer(
-    //         instance.allocators.memory_allocator.clone(),
-    //         instance.get_graphics_pipeline(),
-    //         data,
-    //         Default::default()
-    //     );
-    // }
-        // UniformBuffer::create(
-        //     instance.allocators.memory_allocator,
-        //     instance.get_graphics_pipeline(),
-        //     0,
-        //     0,
-        //     data,
-        //     Default::default(),
-        // )
-        // UniformBuffer::from_data(
-        //     instance.allocators.memory_allocator,
-        //     data,
-        //     Default::default()
-        // ).unwrap()
- 
-
+        ]);
         
-
-        // UniformBuffer::create(
-        //     instance.allocators.memory_allocator,
-        //     instance.get_graphics_pipeline(),
-        //     0,
-        //     1,
-        //     data,
-        //     Default::default()    
-        // );
-
-        // UniformBuffer::from_data(
-        //     instance.allocators.memory_allocator,
-        //     data,
-        //     Default::default()
-        // ).unwrap()
-    // };
-
-    
-    // let mut command_buffers = create_command_buffers(
-    //     &instance, 
-    // vertices.clone(), 
-    // indicies.clone(), 
-    // vec![uniform_set]
-    // // [
-    // //     uniform0, uniform1
-    // //     ]
-    // );
+        let indicies: Vec<u32> = Vec::from([0, 1, 2, 0, 2, 3]);
+        
+        let mut camera_position = glm::vec3(0.0,0.0,0.0);
+    // Data for uniform 1
 
     el.set_control_flow(ControlFlow::Poll);
     let _ = el.run(|app_event, elwt| match app_event {
-
         // Window based Events
         Event::WindowEvent {
             event: WindowEvent::Resized(_),
@@ -573,6 +487,24 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             event: WindowEvent::RedrawRequested,
             ..
         } => {
+
+
+            let mut model = glm::identity::<f32, 4>();
+            model = glm::translate(&model, &glm::vec3(0.1, 0.0, 0.0));
+            // model = glm::scale(&model, &glm::vec3(10.0,10.0,10.0));
+
+            let mut view = glm::look_at(
+                &camera_position,
+                &glm::vec3(camera_position.x, camera_position.y, camera_position.z + -0.01),
+                &glm::vec3(0.0, 1.0, 0.0),
+            );
+
+            let projection = glm::perspective(
+                (window.inner_size().width / window.inner_size().height) as f32,
+                std::f32::consts::PI / 4.0,
+                0.01,
+                -1000.0,
+            );
             // draw call
 
             if window_resized || recreate_swapchain {
@@ -597,17 +529,16 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             // uniform 0
             {
                 let mut data = shaders::vs::Data {
-                    view: unsafe { START.unwrap().elapsed().unwrap().as_secs_f32() }
+                    view: unsafe { START.unwrap().elapsed().unwrap().as_secs_f32() },
                 };
-        
+
                 uniform_set.add_uniform_buffer(
                     instance.allocators.memory_allocator.clone(),
                     instance.get_graphics_pipeline(),
                     data,
-            Default::default()
+                    Default::default(),
                 );
             }
-
 
             // uniform 1
             {
@@ -616,71 +547,21 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                     view: Into::<[[f32; 4]; 4]>::into(view),
                     projection: Into::<[[f32; 4]; 4]>::into(projection),
                 };
-        
-            
+
                 uniform_set.add_uniform_buffer(
                     instance.allocators.memory_allocator.clone(),
                     instance.get_graphics_pipeline(),
                     data,
-                    Default::default()
+                    Default::default(),
                 );
             }
-
-            // uniform0 = {
-            //     let mut data = shaders::vs::Data {
-            //         view: unsafe { START.unwrap().elapsed().unwrap().as_secs_f32() }
-            //     };
-
-            //     UniformBuffer::create(
-            //         instance.allocators.memory_allocator,
-            //         instance.get_graphics_pipeline(),
-            //         0,
-            //         0,
-            //         data,
-            //         Default::default()
-            //     )
-            // };
-
-            // uniform_data1 = UniformBuffer::from_data(
-            //     instance.allocators.memory_allocator,
-            //     shaders::vs::Data {
-            //         view: unsafe { START.unwrap().elapsed().unwrap().as_secs_f32() }
-            //     },
-            //     BufferOptions {
-            //         memory_type_filter: MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
-            //     }
-            // ).unwrap();
-
-            // uniform1 = {
-            //     let data = shaders::vs::MvpMatrix {
-            //         model: Into::<[[f32; 4]; 4]>::into(model),
-            //         view: Into::<[[f32; 4]; 4]>::into(view),
-            //         projection: Into::<[[f32; 4]; 4]>::into(projection),
-            //     }
-
-            //     UniformBuffer::create(
-            //         instance.allocators.memory_allocator,
-            //         instance.get_graphics_pipeline(),
-            //         0,
-            //         1,
-            //         data,
-            //         Default::default()
-            //     )
-            // };
 
             let command_buffers = create_command_buffers(
                 &instance,
                 vertices.clone(),
                 indicies.clone(),
-                // vec![uniform_data1, uniform_data2]
-                vec![uniform_set]
-                // vec![graphics_pack::buffers::UniformSet::new(0).add_uniform_buffer(
-                //     instance.allocators.memory_allocator, 
-                //     instance.get_graphics_pipeline(), 
-                //     data0, Default::default()).
-                // ]
+                vec![uniform_set],
             );
-                
 
             let (image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
                 instance.swapchain_info.swapchain.clone(),
@@ -743,7 +624,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
         Event::WindowEvent { window_id, event } => {
             // Handling the window event if the event is bound to the owned window
             if window_id == window.id() {
-                winit_handle_window_events(event, elwt);
+                winit_handle_window_events(event, elwt, &mut camera_position);
             }
         }
 
@@ -990,6 +871,7 @@ fn create_descriptor_set_allocator(
 }
 
 static mut START: Option<SystemTime> = None;
+static mut MOVE_SPEED: f32 = 0.1;
 
 fn refresh_render_target(
     window: Arc<Window>,
@@ -1040,20 +922,18 @@ fn refresh_render_target(
 
  Every time a swapchain is invalidated, these steps need to be carried out to reconfigure the command buffers.
 */
-fn create_command_buffers
-(
+fn create_command_buffers(
     instance: &VulkanInstance,
     vertex_data: Vec<VertexPoint>,
     index_data: Vec<u32>,
     uniform_sets: Vec<UniformSet>,
     // uniforms: Vec<UniformBuffer>,
     // uniform_buffer_data: graphics_pack::shaders::vs::Data,
-) -> Vec<CommandBufferType> 
-{
+) -> Vec<CommandBufferType> {
     // let uniforms_descriptor_set = UniformBuffer::get_descriptor_set(
     //     instance.get_logical_device(),
     //     instance.get_graphics_pipeline(),
-    //     instance.allocators.descriptor_set_allocator.clone(), 
+    //     instance.allocators.descriptor_set_allocator.clone(),
     //     0,
     //     uniforms
     // );
@@ -1100,7 +980,7 @@ fn create_command_buffers
         index_buffer,
         // uniform_buffer,
         // uniforms
-        uniform_sets
+        uniform_sets,
     );
 
     return command_buffers;
@@ -1121,9 +1001,8 @@ fn build_fbo_command_buffers_for_pipeline(
     index_buffer: IndexBuffer,
     // uniform_buffer_descriptor: Arc<PersistentDescriptorSet>, // uniform_buffer: Subbuffer<shaders::vs::Data>,
     // uniforms: Vec<UniformBuffer>,
-    uniform_sets: Vec<UniformSet>
-) -> Vec<CommandBufferType>
-{
+    uniform_sets: Vec<UniformSet>,
+) -> Vec<CommandBufferType> {
     // I need:
     // Command buffer built using AutoCommandBufferBuilder - done
     // render pass created for data
@@ -1152,11 +1031,9 @@ fn build_fbo_command_buffers_for_pipeline(
 
     // let fbos = &instance.render_target.fbos;
 
-
     // let descriptor_set_array: Vec<WriteDescriptorSet> = uniforms.iter().map(|ub| {
     //     ub.get_descriptor_set()
     // }).collect();
-
 
     // // TODO: Find out what are descriptor_copies
     // let persistent_descriptor_set = PersistentDescriptorSet::new(
@@ -1166,13 +1043,12 @@ fn build_fbo_command_buffers_for_pipeline(
     //     []
     // ).unwrap();
 
-    let mut persistent_descriptor_sets: Vec<Arc<PersistentDescriptorSet>> =
-        uniform_sets.into_iter().map(|us| {
-            us.get_persistent_descriptor_set(
-                uniform_allocator.clone(), 
-                graphics_pipeline.clone()
-            )
-        }).collect();
+    let mut persistent_descriptor_sets: Vec<Arc<PersistentDescriptorSet>> = uniform_sets
+        .into_iter()
+        .map(|us| {
+            us.get_persistent_descriptor_set(uniform_allocator.clone(), graphics_pipeline.clone())
+        })
+        .collect();
 
     println!("Length: {}", persistent_descriptor_sets.len());
 
@@ -1209,7 +1085,9 @@ fn build_fbo_command_buffers_for_pipeline(
                 .unwrap()
                 .bind_pipeline_graphics(graphics_pipeline.clone())
                 .unwrap();
-            
+
+            command_builder.push_descriptor_set(
+                pipeline_bind_point, pipeline_layout, set_num, descriptor_writes)
 
             // Binding buffers
             command_builder
@@ -1217,8 +1095,6 @@ fn build_fbo_command_buffers_for_pipeline(
                 .unwrap()
                 .bind_vertex_buffers(0, vertex_subbuffer)
                 .unwrap();
-            
-
 
             // Binding uniforms (descriptor sets)
             command_builder
@@ -1231,7 +1107,6 @@ fn build_fbo_command_buffers_for_pipeline(
                 )
                 .unwrap();
 
-            
             // for persistent_set in persistent_descriptor_sets {
             //     command_builder
             //         .bind_descriptor_sets(
@@ -1243,7 +1118,6 @@ fn build_fbo_command_buffers_for_pipeline(
             //         )
             //         .unwrap();
             // }
-                
 
             // Draw call
             command_builder

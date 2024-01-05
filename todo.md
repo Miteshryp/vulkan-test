@@ -1,9 +1,11 @@
 
 # TODAY's GOALS
 
-[] Model View Projection matrix integration
-    - [] nalgebra integration
-    - [] vulkan pushconstants
+[x] Model View Projection matrix integration
+
+[] descriptor set updates
+[] push constants
+[] push descriptors
 
 
 

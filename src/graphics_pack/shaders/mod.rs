@@ -40,7 +40,7 @@ pub mod vs {
             layout(location = 1) out float v;
             
             void main() {
-                gl_Position = mvp.model * vec4(position.xyz, 1.0);
+                gl_Position =  mvp.projection * mvp.view * mvp.model * vec4(position.xyz, 1.0);
                 out_color = color;
                 v = uniforms.view;
             }

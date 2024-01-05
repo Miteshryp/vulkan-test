@@ -14,7 +14,6 @@ use crate::graphics_pack::buffers::base_buffer::*;
 
 pub struct UniformSet {
     pub descriptor_set_index: usize,
-    // pub binded_uniforms: u32, // size of currently binded uniforms
     pub uniforms: Vec<UniformBuffer>,
 }
 
@@ -25,7 +24,6 @@ impl UniformSet {
     pub fn new(descriptor_set_index: usize) -> Self {
         UniformSet {
             descriptor_set_index: descriptor_set_index,
-            // binded_uniforms: 0,
             uniforms: Vec::new()
         }
     }
@@ -40,8 +38,6 @@ impl UniformSet {
             .set_layouts()
             .get(self.descriptor_set_index)
             .unwrap();
-
-        println!("Layout: {:?}", pipeline_layout);
 
         let uniform_buffers: Vec<WriteDescriptorSet> = self.uniforms
             .into_iter()
@@ -69,17 +65,7 @@ impl UniformSet {
     ) 
     where
         T: BufferContents
-    {
-        // Creating the buffer
-        // let buffer = create_buffer_from_single_data(
-        //     buffer_allocator.clone(),
-        //     data,
-        //     BufferUsage::UNIFORM_BUFFER,
-        //     options.memory_type_filter,
-        // );
-
-        // let descriptor_set = WriteDescriptorSet::buffer(self.binded_uniforms, buffer);
-        
+    {        
         let mut uniform_buffer = UniformBuffer::create(
             buffer_allocator, 
             // self.binded_uniforms,
@@ -89,7 +75,6 @@ impl UniformSet {
         );
         
         self.uniforms.push(uniform_buffer);
-        // self.binded_uniforms += 1; // increasing the length of bound uniforms
     }
 
 
@@ -102,9 +87,7 @@ impl UniformSet {
 // Step 4: This persistent descriptor set can then be passed into a single bind_descriptor_set call
 
 pub struct UniformBuffer {
-    descriptor_set: WriteDescriptorSet,
-    // buffer: BufferSingle<T>,
-    // descriptor_set: Option<Arc<PersistentDescriptorSet>>,
+    descriptor_set: WriteDescriptorSet
 }
 
 
@@ -130,113 +113,13 @@ impl UniformBuffer {
             options.memory_type_filter,
         );
 
-        // Creating descriptor set and storing the buffer in it
-        // let layout = graphics_pipeline
-        //     .layout()
-        //     .set_layouts()
-        //     .get(descriptor_set_index as usize)
-        //     .unwrap();
-
-        // This part has to be created when creating command buffers
-        // let descriptor_set_data = PersistentDescriptorSet::new(
-        //     &allocator,
-        //     layout.clone(),
-        //     [WriteDescriptorSet::buffer(
-        //         binding_index,
-        //         buffer
-        //     )], // 0 is the binding
-        //     [],
-        // )
-        // .unwrap();
-
-        let descriptor_set = WriteDescriptorSet::buffer(binding_index, buffer);
+        // Writing the buffer to a specific binding
+        let descriptor_set: WriteDescriptorSet = WriteDescriptorSet::buffer(binding_index, buffer);
 
         Self { descriptor_set: descriptor_set }
     }
 
-    pub fn get_descriptor_set(
-        self,
-        // device: Arc<Device>,
-        // graphics_pipeline: Arc<GraphicsPipeline>,
-        // allocator: DescriptorSetAllocator,
-        // descriptor_set_index: u32,
-        // // uniforms: Vec<UniformBuffer<impl BufferContents>>,
-        // binding_index: u32,
-        // ) -> Arc<PersistentDescriptorSet> {
-    ) -> WriteDescriptorSet {
+    pub fn get_descriptor_set(self) -> WriteDescriptorSet {
         self.descriptor_set
     }
 }
-
-// impl<T> VecBufferOps<T> for UniformBuffer<T>
-// where
-//     T: BufferContents,
-// {
-//     type BufferAllocator = GenericBufferAllocator;
-//     // data should contain a single object
-//     fn from_vec(
-//         allocator: GenericBufferAllocator,
-//         data: Vec<T>,
-//         options: BufferOptions,
-//     ) -> Option<Self> {
-//         // let raw_buffer = create_buffer_from_vec(
-//         //     allocator.clone(),
-//         //     data,
-//         //     BufferUsage::UNIFORM_BUFFER,
-//         //     options.memory_type_filter
-//         // );
-
-//         // UniformBuffer {
-//         // buffer: BufferVec {
-//         //         raw_buffer: raw_buffer,
-//         //         options: options
-//         //     }
-//         // }
-
-//         None
-//     }
-
-//     fn consume(self) -> (vulkano::buffer::Subbuffer<[T]>, u32) {
-//         todo!()
-//     }
-
-//     fn from_data(
-//         allocator: GenericBufferAllocator,
-//         data: T,
-//         options: BufferOptions,
-//     ) -> Option<Self> {
-//         let buffer = create_buffer_from_single_data(
-//             allocator.clone(),
-//             data,
-//             BufferUsage::UNIFORM_BUFFER,
-//             options.memory_type_filter,
-//         );
-
-//         let layout = graphics_pipeline
-//             .layout()
-//             .set_layouts()
-//             .get(descriptor_set_index as usize)
-//             .unwrap();
-
-//         let descriptor_set_data = PersistentDescriptorSet::new(
-//             &allocator,
-//             layout.clone(),
-//             [WriteDescriptorSet::buffer(
-//                 binding_index,
-//                 self.buffer.raw_buffer,
-//             )], // 0 is the binding
-//             [],
-//         )
-//         .unwrap();
-
-//         let descriptor_set = WriteDescriptorSet::buffer(binding)
-
-//         // Some(Self {
-//         //     buffer: BufferSingle {
-//         //         raw_buffer: buffer,
-//         //         options: options,
-//         //     },
-//         //     descriptor_set: None
-//         // })
-//     }
-// }
