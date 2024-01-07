@@ -27,7 +27,7 @@ use vulkano::{
     },
     descriptor_set::{
         allocator::StandardDescriptorSetAllocator, persistent, PersistentDescriptorSet,
-        WriteDescriptorSet,
+        WriteDescriptorSet, layout::DescriptorSetLayoutCreateFlags,
     },
     device::{
         physical::{self, PhysicalDeviceType},
@@ -89,6 +89,7 @@ struct InstanceAllocators {
     memory_allocator: GenericBufferAllocator,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 }
+
 struct VulkanInstance {
     logical: Arc<Device>,
     physical: Arc<vulkano::device::physical::PhysicalDevice>,
@@ -199,7 +200,7 @@ fn create_graphics_pipeline(
         .entry_point("main")
         .unwrap();
 
-    println!("Vertex Shader entry point info: {:?}", vertex_shader.info());
+    // println!("Vertex Shader entry point info: {:?}", vertex_shader.info());
 
     let fragment_shader = shaders::get_fragment_shader(logical_device.clone())
         .entry_point("main")
@@ -217,17 +218,16 @@ fn create_graphics_pipeline(
     ];
 
     let window_size = window.inner_size();
+    let mut descriptor_set_layout = PipelineDescriptorSetLayoutCreateInfo::from_stages(&pipeline_stages);
+    let set_layout = &mut descriptor_set_layout.set_layouts[0];
+    set_layout.flags |= DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR;
+    // set_layout.bindings.get(&0).unwrap().
 
-    // PipelineLayoutCreateInfo
     let mut descriptor_create_info =
-        PipelineDescriptorSetLayoutCreateInfo::from_stages(&pipeline_stages)
-            // PipelineDescriptorSetLayoutCreateInfo::
+        descriptor_set_layout
             .into_pipeline_layout_create_info(logical_device.clone())
             .unwrap();
-
-    // descriptor_create_info.set_layouts = descriptor_create_info.set_layouts.into_iter().map(|layout| {
-    //     layout.
-    // }).collect();
+        
 
     // ERROR: from_stages is setting descriptor set count to 1
     let pipeline_layout =
@@ -288,7 +288,7 @@ fn create_graphics_pipeline(
     .unwrap()
 }
 
-fn get_framebuffer_object(
+fn create_framebuffer_object(
     render_pass: Arc<RenderPass>,
     image: Arc<Image>,
     depth_stencil_image: Arc<Image>,
@@ -302,30 +302,6 @@ fn get_framebuffer_object(
             attachments: vec![view, depth_stencil_view],
             ..Default::default()
         },
-    )
-    .unwrap()
-}
-
-fn create_buffer_from_data<T>(
-    allocator: GenericBufferAllocator,
-    data: T,
-    buffer_usage: BufferUsage,
-    memory_type_filter: MemoryTypeFilter,
-) -> Subbuffer<T>
-where
-    T: BufferContents,
-{
-    Buffer::from_data(
-        allocator,
-        BufferCreateInfo {
-            usage: buffer_usage,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: memory_type_filter,
-            ..Default::default()
-        },
-        data,
     )
     .unwrap()
 }
@@ -524,43 +500,57 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                 recreate_swapchain = false;
             }
 
-            let mut uniform_set = UniformSet::new(0);
-
+            // let mut uniform_set = UniformSet::new(0);
+            
             // uniform 0
-            {
+            // {
+
                 let mut data = shaders::vs::Data {
                     view: unsafe { START.unwrap().elapsed().unwrap().as_secs_f32() },
                 };
+                
+                // uniform_set.add_uniform_buffer(
+                    //     instance.allocators.memory_allocator.clone(),
+                    //     instance.get_graphics_pipeline(),
+                    //     data,
+                    //     Default::default(),
+                    // );     
+                    let mut uni0 = UniformBuffer::create(
+                        instance.allocators.memory_allocator.clone(), 
+                        0, 
+                        data, 
+                        Default::default()
+                    );
+            // }
 
-                uniform_set.add_uniform_buffer(
-                    instance.allocators.memory_allocator.clone(),
-                    instance.get_graphics_pipeline(),
-                    data,
-                    Default::default(),
-                );
-            }
 
             // uniform 1
-            {
+            // {
                 let mut data = shaders::vs::MvpMatrix {
                     model: Into::<[[f32; 4]; 4]>::into(model),
                     view: Into::<[[f32; 4]; 4]>::into(view),
                     projection: Into::<[[f32; 4]; 4]>::into(projection),
                 };
 
-                uniform_set.add_uniform_buffer(
-                    instance.allocators.memory_allocator.clone(),
-                    instance.get_graphics_pipeline(),
-                    data,
-                    Default::default(),
+                // uniform_set.add_uniform_buffer(
+                //     instance.allocators.memory_allocator.clone(),
+                //     instance.get_graphics_pipeline(),
+                //     data,
+                //     Default::default(),
+                // );
+                let mut uni1 = UniformBuffer::create(
+                    instance.allocators.memory_allocator.clone(), 
+                    1, 
+                    data, Default::default()
                 );
-            }
+            // }
 
             let command_buffers = create_command_buffers(
                 &instance,
                 vertices.clone(),
                 indicies.clone(),
-                vec![uniform_set],
+                // vec![uniform_set],
+                vec![uni0, uni1]
             );
 
             let (image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
@@ -744,6 +734,7 @@ fn initialise_vulkan_runtime(window: Arc<Window>, el: &EventLoop<()>) -> VulkanI
     // We need a device with swapchain extensions for graphics rendering
     let device_extensions = DeviceExtensions {
         khr_swapchain: true,
+        khr_push_descriptor: true,
         // ext_debug_marker: true,
         ..Default::default()
     };
@@ -902,7 +893,7 @@ fn refresh_render_target(
     let fbos: Vec<Arc<Framebuffer>> = swapchain_info
         .images
         .iter()
-        .map(|img| get_framebuffer_object(render_pass.clone(), img.clone(), depth_image.clone()))
+        .map(|img| create_framebuffer_object(render_pass.clone(), img.clone(), depth_image.clone()))
         .collect();
 
     let graphics_pipeline =
@@ -926,8 +917,8 @@ fn create_command_buffers(
     instance: &VulkanInstance,
     vertex_data: Vec<VertexPoint>,
     index_data: Vec<u32>,
-    uniform_sets: Vec<UniformSet>,
-    // uniforms: Vec<UniformBuffer>,
+    // uniform_sets: Vec<UniformSet>,
+    uniforms: Vec<UniformBuffer>,
     // uniform_buffer_data: graphics_pack::shaders::vs::Data,
 ) -> Vec<CommandBufferType> {
     // let uniforms_descriptor_set = UniformBuffer::get_descriptor_set(
@@ -979,8 +970,8 @@ fn create_command_buffers(
         vertex_buffer,
         index_buffer,
         // uniform_buffer,
-        // uniforms
-        uniform_sets,
+        uniforms
+        // uniform_sets,
     );
 
     return command_buffers;
@@ -1000,57 +991,40 @@ fn build_fbo_command_buffers_for_pipeline(
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
     // uniform_buffer_descriptor: Arc<PersistentDescriptorSet>, // uniform_buffer: Subbuffer<shaders::vs::Data>,
-    // uniforms: Vec<UniformBuffer>,
-    uniform_sets: Vec<UniformSet>,
+    uniforms: Vec<UniformBuffer>,
+    // uniform_sets: Vec<UniformSet>,
 ) -> Vec<CommandBufferType> {
-    // I need:
-    // Command buffer built using AutoCommandBufferBuilder - done
-    // render pass created for data
-    // FBO - done
-    // graphics pipeline object
 
     let queue_family_index = queue.queue_family_index();
 
-    // let descriptor_set_index: usize = 0;
-    // let descriptor_set_allocator =
-    //     Arc::new(StandardDescriptorSetAllocator::new(logical_device, Default::default()));
+    // let mut persistent_descriptor_sets: Vec<Arc<PersistentDescriptorSet>> = uniform_sets
+    //     .into_iter()
+    //     .map(|us| {
+    //         us.get_persistent_descriptor_set(uniform_allocator.clone(), graphics_pipeline.clone())
+    //     })
+    //     .collect();
 
-    // let pipeline_layout = graphics_pipeline
-    //     .layout()
-    //     .set_layouts()
-    //     .get(descriptor_set_index)
-    //     .unwrap();
+    // println!("Length: {}", persistent_descriptor_sets.len());
+    // let sample = [WriteDescriptorSet::buffer(0, Buffer::from_data(
+    //     create_buffer_allocator(logical_device.clone()), 
+    //     BufferCreateInfo {
+    //         usage: BufferUsage::UNIFORM_BUFFER,
+    //         ..Default::default()
+    //     }, AllocationCreateInfo {
+    //         memory_type_filter: MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+    //         ..Default::default()
+    //     }, 
 
-    // let descriptor_set = PersistentDescriptorSet::new(
-    //     &descriptor_set_allocator,
-    //     descriptor_set_layout.clone(),
-    //     [WriteDescriptorSet::buffer(0, uniform_buffer)], // 0 is the binding
-    //     [],
-    // )
-    // .unwrap();
+    //     // Into::<[[f32; 4]; 4]>::into(model)
+    //     shaders::vs::MvpMatrix {
+    //         model: Into::<[[f32; 4]; 4]>::into(glm::identity::<f32, 4>()),
+    //         view: Into::<[[f32; 4]; 4]>::into(glm::identity::<f32, 4>()),
+    //         projection: Into::<[[f32; 4]; 4]>::into(glm::identity::<f32, 4>())
+    //     }
+    // ).unwrap())];
 
-    // let fbos = &instance.render_target.fbos;
+    
 
-    // let descriptor_set_array: Vec<WriteDescriptorSet> = uniforms.iter().map(|ub| {
-    //     ub.get_descriptor_set()
-    // }).collect();
-
-    // // TODO: Find out what are descriptor_copies
-    // let persistent_descriptor_set = PersistentDescriptorSet::new(
-    //     &uniform_allocator,
-    //     pipeline_layout.clone(),
-    //     descriptor_set_array.,
-    //     []
-    // ).unwrap();
-
-    let mut persistent_descriptor_sets: Vec<Arc<PersistentDescriptorSet>> = uniform_sets
-        .into_iter()
-        .map(|us| {
-            us.get_persistent_descriptor_set(uniform_allocator.clone(), graphics_pipeline.clone())
-        })
-        .collect();
-
-    println!("Length: {}", persistent_descriptor_sets.len());
 
     fbos.into_iter()
         .map(|fb| {
@@ -1086,8 +1060,6 @@ fn build_fbo_command_buffers_for_pipeline(
                 .bind_pipeline_graphics(graphics_pipeline.clone())
                 .unwrap();
 
-            command_builder.push_descriptor_set(
-                pipeline_bind_point, pipeline_layout, set_num, descriptor_writes)
 
             // Binding buffers
             command_builder
@@ -1096,28 +1068,34 @@ fn build_fbo_command_buffers_for_pipeline(
                 .bind_vertex_buffers(0, vertex_subbuffer)
                 .unwrap();
 
-            // Binding uniforms (descriptor sets)
-            command_builder
-                .bind_descriptor_sets(
-                    PipelineBindPoint::Graphics,
-                    graphics_pipeline.clone().layout().clone(),
-                    0,
-                    persistent_descriptor_sets.clone(),
-                    // descriptor_set_aran `FnMut`ray.as_ref()
-                )
-                .unwrap();
+            // command_builder.push_descriptor_set(
+            //     PipelineBindPoint::Graphics, 
+            //     graphics_pipeline.layoyt(), 
+            //     // set_num,
+            //     // descriptor_writes
+            // );
 
-            // for persistent_set in persistent_descriptor_sets {
-            //     command_builder
-            //         .bind_descriptor_sets(
-            //             PipelineBindPoint::Graphics,
-            //             graphics_pipeline.clone().layout().clone(),
-            //             0,
-            //             uniform_buffer_descriptor.clone(),
-            //             // descriptor_set_array.as_ref()
-            //         )
-            //         .unwrap();
-            // }
+
+            // Binding uniforms (descriptor sets)
+            // command_builder
+            //     .bind_descriptor_sets(
+            //         PipelineBindPoint::Graphics,
+            //         graphics_pipeline.layout().clone(),
+            //         0,
+            //         persistent_descriptor_sets.clone(),
+            //     )
+            //     .unwrap();
+            
+            // let push_descriptor_writes:  = uniforms.into_iter().collect();
+            let samples = uniforms.clone().into_iter().map(|ub| {ub.get_write_descriptor()}).collect();
+
+            command_builder.push_descriptor_set(
+                PipelineBindPoint::Graphics, 
+                graphics_pipeline.layout().clone(), 
+                0,
+                samples
+                // sample
+            ).unwrap();
 
             // Draw call
             command_builder
@@ -1177,5 +1155,6 @@ fn main() {
     let (window, elwt) = create_window();
     let mut vulkan_instance: VulkanInstance = initialise_vulkan_runtime(window.clone(), &elwt);
 
+    println!("Descriptor count: {}", vulkan_instance.get_graphics_pipeline().layout().set_layouts().len());
     start_window_event_loop(window.clone(), elwt, vulkan_instance);
 }

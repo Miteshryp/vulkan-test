@@ -3,11 +3,15 @@
 
 [x] Model View Projection matrix integration
 
+[] Create a new mechanism for persistent descriptors
+[] Create a mechanism for passing dynamic data in push descriptors
+
 [] descriptor set updates
 [] push constants
 [] push descriptors
 
-
+# Questions
+1. When to push constants vs push descriptor
 
 # FUTURE GOALS
 [] Multipass / Deffered rendering

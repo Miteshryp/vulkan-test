@@ -3,7 +3,7 @@ use vulkano::{
     buffer::{BufferContents, BufferUsage},
     descriptor_set::{
         allocator::StandardDescriptorSetAllocator, DescriptorSet, PersistentDescriptorSet,
-        WriteDescriptorSet,
+        WriteDescriptorSet, persistent,
     },
     device::Device,
     memory::allocator::MemoryTypeFilter,
@@ -14,6 +14,7 @@ use crate::graphics_pack::buffers::base_buffer::*;
 
 pub struct UniformSet {
     pub descriptor_set_index: usize,
+    // pub persistent_descriptor_set: Arc<PersistentDescriptorSet>
     pub uniforms: Vec<UniformBuffer>,
 }
 
@@ -21,9 +22,32 @@ impl UniformSet {
 
     // TODO: Put in a check to see if the descriptor index is in the
     //      range allowed by the physical device
-    pub fn new(descriptor_set_index: usize) -> Self {
+    pub fn new(
+        descriptor_set_index: usize,
+    ) -> Self {
+        // let pipeline_layout = graphics_pipeline
+        //     .layout()
+        //     .set_layouts()
+        //     .get(self.descriptor_set_index)
+        //     .unwrap();
+
+        // let uniform_buffers: Vec<WriteDescriptorSet> = self.uniforms
+        //     .into_iter()
+        //     .map(|ub| {
+        //         ub.get_descriptor_set()
+        //     })
+        //     .collect();
+
+        // let persistent_descriptor_set = PersistentDescriptorSet::new(
+        //     &descriptor_set_allocator,
+        //     pipeline_layout.clone(),
+        //     uniform_buffers,
+        //     []
+        // ).unwrap();
+
         UniformSet {
             descriptor_set_index: descriptor_set_index,
+            // persistent_descriptor_set: persistent_descriptor_set,
             uniforms: Vec::new()
         }
     }
@@ -33,6 +57,8 @@ impl UniformSet {
         descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
         graphics_pipeline: Arc<GraphicsPipeline>,
     ) -> Arc<PersistentDescriptorSet> {
+        // self.persistent_descriptor_set.clone()
+        
         let pipeline_layout = graphics_pipeline
             .layout()
             .set_layouts()
@@ -42,7 +68,7 @@ impl UniformSet {
         let uniform_buffers: Vec<WriteDescriptorSet> = self.uniforms
             .into_iter()
             .map(|ub| {
-                ub.get_descriptor_set()
+                ub.get_write_descriptor()
             })
             .collect();
 
@@ -59,7 +85,6 @@ impl UniformSet {
         &mut self,
         buffer_allocator: GenericBufferAllocator,
         graphics_pipeline: Arc<GraphicsPipeline>,
-        // descriptor_set_index: u32,
         data: T,
         options: BufferOptions,
     ) 
@@ -86,8 +111,10 @@ impl UniformSet {
 // Step 3: This UniformSet can then be compiled to produce a single persistent descriptor set
 // Step 4: This persistent descriptor set can then be passed into a single bind_descriptor_set call
 
+#[derive(Clone, Debug)]
 pub struct UniformBuffer {
     descriptor_set: WriteDescriptorSet
+    // descriptor_set: Arc<WriteDescriptorSet>
 }
 
 
@@ -114,12 +141,16 @@ impl UniformBuffer {
         );
 
         // Writing the buffer to a specific binding
+        // Write descriptor set contains the raw bytes of the buffer passed into the buffer function.
+        // Basically just converts our data into raw streamable bytes.
         let descriptor_set: WriteDescriptorSet = WriteDescriptorSet::buffer(binding_index, buffer);
 
         Self { descriptor_set: descriptor_set }
+        // Self { descriptor_set: Arc::new(descriptor_set) }
     }
 
-    pub fn get_descriptor_set(self) -> WriteDescriptorSet {
+    pub fn get_write_descriptor(self) -> WriteDescriptorSet {
+    // pub fn get_write_descriptor(&self) -> WriteDescriptorSet {
         self.descriptor_set
     }
 }
