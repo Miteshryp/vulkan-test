@@ -1,23 +1,22 @@
-
-use vulkano::{
-    buffer::{BufferUsage, Subbuffer, IndexType},
-};
+use vulkano::buffer::{Buffer, BufferUsage, IndexType, Subbuffer};
 
 use crate::graphics_pack::buffers::{
-    base_buffer::{
-        self,
-        VecBuffer, GenericBufferAllocator, BufferOptions, VecBufferOps
-    },
-    primitives::{
-        VertexPoint
-    }
+    base_buffer::{self, BufferOptions, GenericBufferAllocator, VecBuffer, VecBufferOps},
+    primitives::{InstanceData, VertexPoint},
 };
 
+use super::base_buffer::create_buffer_from_vec;
 
 #[derive(Clone)]
 pub struct VertexBuffer {
     pub buffer: VecBuffer<VertexPoint>,
     pub vertices: u32,
+}
+
+#[derive(Clone)]
+pub struct InstanceBuffer {
+    pub buffer: VecBuffer<InstanceData>,
+    pub instances: u32,
 }
 
 impl VecBufferOps<VertexPoint> for VertexBuffer {
@@ -49,24 +48,58 @@ impl VecBufferOps<VertexPoint> for VertexBuffer {
         (self.buffer.raw_buffer, self.vertices)
     }
 
-    fn from_data(allocator: GenericBufferAllocator, data: VertexPoint, options: BufferOptions) -> Option<Self> where Self: Sized {
-        // let buffer = base_buffer::create_buffer_from_single_data(
-        //     allocator.clone(),
-        //     ,
-        //     BufferUsage::VERTEX_BUFFER,
-        //     options.memory_type_filter
-        // );
-
-        // Some(VertexBuffer {
-        //     buffer: BufferVec {
-        //         raw_buffer: buffer,
-        //         options: options
-        //     },
-        //     vertices: 1
-        // })
-
+    fn from_data(
+        allocator: GenericBufferAllocator,
+        data: VertexPoint,
+        options: BufferOptions,
+    ) -> Option<Self>
+    where
+        Self: Sized,
+    {
         None
+    }
+}
 
-        // Cannot create a vertex buffer with a single vertex
+impl VecBufferOps<InstanceData> for InstanceBuffer {
+    type BufferAllocator = GenericBufferAllocator;
+
+    fn from_vec(
+        allocator: Self::BufferAllocator,
+        data: Vec<InstanceData>,
+        options: BufferOptions,
+    ) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let vertex_count = data.len();
+        let buffer = base_buffer::create_buffer_from_vec(
+            allocator.clone(),
+            data,
+            BufferUsage::VERTEX_BUFFER,
+            options.memory_type_filter,
+        );
+
+        Some(InstanceBuffer {
+            buffer: VecBuffer {
+                raw_buffer: buffer,
+                options: options,
+            },
+            instances: vertex_count as u32,
+        })
+    }
+
+    fn from_data(
+        allocator: Self::BufferAllocator,
+        data: InstanceData,
+        options: BufferOptions,
+    ) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        None
+    }
+
+    fn consume(self) -> (Subbuffer<[InstanceData]>, u32) {
+        (self.buffer.raw_buffer, self.instances)
     }
 }

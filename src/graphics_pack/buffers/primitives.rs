@@ -2,7 +2,6 @@
 use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex};
 // extern crate nalgebra_glm as glm;
 
-
 #[derive(BufferContents, Clone, Vertex, Debug)]
 #[repr(C)]
 pub struct VertexPoint {
@@ -10,9 +9,18 @@ pub struct VertexPoint {
     pub position: Vec3,
 
     #[format(R32G32B32_SFLOAT)]
-    pub color: Vec3
+    pub color: Vec3,
 }
 
+#[derive(BufferContents, Vertex, Debug, Clone)]
+#[repr(C)]
+pub struct InstanceData {
+    #[format(R32G32B32_SFLOAT)]
+    pub global_position: Vec3,
+
+    #[format(R32_SFLOAT)]
+    pub local_scale: f32,
+}
 
 // fn test() {
 //     let pos = glm::vec4(1.0, 1.0, 1.0, 1.0);
@@ -22,7 +30,7 @@ pub struct VertexPoint {
 
 //     let mut view: glm::Mat4 = glm::identity(); // camera position
 //     view = glm::look_at(&glm::vec3(0.0,0.0,0.0), &glm::vec3(0.0,0.0,1.0), &glm::vec3(0.0,1.0,0.0));
-    
+
 //     let projection: glm::Mat4 = glm::perspective(16.0 / 9.0, std::f32::consts::PI / 4.0, 0.1, 1000.0);
 
 //     let final_pos: glm::Vec4 = (model * view * projection * pos).into();

@@ -1,25 +1,17 @@
 
 # TODAY's GOALS
 
-[x] Model View Projection matrix integration
+[x] Solve the global store problem in rust. - Will be solved using plugins (like in nest.js)
 
-[] Create a new mechanism for persistent descriptors
-[] Create a mechanism for passing dynamic data in push descriptors
+[] Texture rendering in shaders
 
-[] descriptor set updates
-[] push constants
-[] push descriptors
-
-# Questions
-1. When to push constants vs push descriptor
 
 # FUTURE GOALS
 [] Multipass / Deffered rendering
-[] Instanced Rendering
 [] Different types of lighting
-[] Texture rendering in shaders
-[] Dynamic shader loading
 
+[] Indirect drawing
+[] Dynamic shader loading
 
 
 
@@ -38,3 +30,5 @@
 - Vulkano code examples - https://github.com/vulkano-rs/vulkano/tree/master/examples 
 - Vulkan official tutorial (C based) - https://vulkan-tutorial.com/
 - Rust version of official vulkan tutorial - https://github.com/bwasty/vulkan-tutorial-rs/
+- Vulkan guide - https://vkguide.dev
+- Descriptor sets guide - https://vkguide.dev/docs/chapter-4/descriptors/#:~:text=Binding%20descriptors&text=We%20will%20be%20doing%20it,slot%2C%20there%20will%20be%20errors.
