@@ -102,32 +102,6 @@ pub mod fs {
     );
 }
 
-// fn create_buffer_from_iter<T, I>(
-//     allocator: GenericBufferAllocator,
-//     iter: I,
-//     buffer_usage: BufferUsage,
-//     memory_type_filter: MemoryTypeFilter,
-// ) -> Subbuffer<[T]>
-// where
-//     T: BufferContents,
-//     I: IntoIterator<Item = T>,
-//     I::IntoIter: ExactSizeIterator,
-// {
-//     Buffer::from_iter(
-//         allocator.clone(),
-//         BufferCreateInfo {
-//             usage: buffer_usage,
-//             ..Default::default()
-//         },
-//         AllocationCreateInfo {
-//             memory_type_filter: memory_type_filter,
-//             ..Default::default()
-//         },
-//         iter,
-//     )
-//     .unwrap()
-// }
-
 pub fn get_vertex_shader(device: Arc<Device>) -> Arc<ShaderModule> {
     vs::load(device).expect("Failed to load vertex shader")
 }
