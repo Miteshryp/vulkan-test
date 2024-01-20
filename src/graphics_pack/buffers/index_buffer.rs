@@ -9,7 +9,7 @@ use crate::graphics_pack::buffers::{
         VecBuffer, VecBufferOps, BufferOptions, GenericBufferAllocator,
     },
     primitives::{
-        self, VertexPoint, Vec3
+        self, VertexData, Vec3
     }
 };
 
@@ -48,7 +48,7 @@ impl VecBufferOps<u32> for IndexBuffer {
         (self.buffer.raw_buffer, self.indicies)
     }
 
-    fn from_data(allocator: GenericBufferAllocator, data: u32, options: BufferOptions) -> Option<Self> where Self: Sized {
-        todo!()
-    }
+    // fn from_data(allocator: GenericBufferAllocator, data: u32, options: BufferOptions) -> Option<Self> where Self: Sized {
+    //     todo!()
+    // }
 }

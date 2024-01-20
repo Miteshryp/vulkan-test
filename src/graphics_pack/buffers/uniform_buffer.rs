@@ -7,7 +7,7 @@ use vulkano::{
     },
     device::Device,
     memory::allocator::MemoryTypeFilter,
-    pipeline::{GraphicsPipeline, Pipeline},
+    pipeline::{GraphicsPipeline, Pipeline}, image::{sampler::Sampler, view::ImageView},
 };
 
 use crate::graphics_pack::buffers::base_buffer::*;
@@ -113,6 +113,23 @@ pub struct UniformBuffer {
 //  Independent Uniform Buffers can be used to create
 //  and pass push descriptors into the command builder
 impl UniformBuffer {
+    pub fn create_sampler(binding_index: u32, sampler: Arc<Sampler>) -> Self {
+        Self {
+            descriptor_set: WriteDescriptorSet::sampler(binding_index, sampler)
+        }
+    }
+    pub fn create_immutable_sampler(binding_index: u32, sampler: Arc<Sampler>) -> Self {
+        Self {
+            descriptor_set: WriteDescriptorSet::none(binding_index)
+        }
+    }
+
+    pub fn create_image_view(binding_index: u32, image_view: Arc<ImageView>) -> Self {
+        Self {
+            descriptor_set: WriteDescriptorSet::image_view(binding_index, image_view)
+        }
+    }
+
     pub fn create<T>(
         buffer_allocator: GenericBufferAllocator,
         binding_index: u32,

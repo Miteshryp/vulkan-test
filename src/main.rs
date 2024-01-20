@@ -1,19 +1,25 @@
 mod graphics_pack;
 // mod vertex;
 
+use image::{
+    codecs::png::{self, PngDecoder},
+    GenericImageView, ImageBuffer, ImageDecoder, ImageFormat,
+};
 use nalgebra_glm as glm;
 
 use graphics_pack::{
     buffers::{
+        self,
         base_buffer::{BufferOptions, VecBufferOps},
-        primitives::{InstanceData, Vec3, VertexPoint},
+        image_buffer,
+        primitives::{InstanceData, Vec2, Vec3, VertexData},
         IndexBuffer, InstanceBuffer, UniformBuffer, UniformSet, VertexBuffer,
     },
     components::camera,
     shaders::{self, fs},
 };
 
-use std::{process::exit, sync::Arc, time::SystemTime};
+use std::{io::Read, process::exit, sync::Arc, time::SystemTime};
 use vulkano::{
     buffer::BufferContents,
     command_buffer::{
@@ -21,8 +27,9 @@ use vulkano::{
             CommandBufferAllocator, StandardCommandBufferAllocator,
             StandardCommandBufferAllocatorCreateInfo,
         },
-        AutoCommandBufferBuilder, CommandBufferLevel, CommandBufferUsage, CopyImageToBufferInfo,
-        PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents,
+        AutoCommandBufferBuilder, CommandBufferLevel, CommandBufferUsage, CopyBufferToImageInfo,
+        CopyImageToBufferInfo, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo,
+        SubpassContents,
     },
     descriptor_set::{
         allocator::StandardDescriptorSetAllocator, layout::DescriptorSetLayoutCreateFlags,
@@ -33,7 +40,11 @@ use vulkano::{
         Device, DeviceCreateInfo, DeviceExtensions, Features, Properties, Queue, QueueCreateInfo,
         QueueFamilyProperties, QueueFlags,
     },
-    image::{view::ImageView, Image, ImageCreateInfo, ImageUsage},
+    image::{
+        sampler::{Sampler, SamplerAddressMode, SamplerCreateInfo},
+        view::ImageView,
+        Image, ImageCreateInfo, ImageUsage,
+    },
     instance::InstanceCreateInfo,
     memory::{
         allocator::{
@@ -84,6 +95,7 @@ struct RenderTargetInfo {
     pipeline: Arc<GraphicsPipeline>,
     // render_pass: Arc<RenderPass>,
     fbos: Vec<Arc<Framebuffer>>,
+    image_sampler: Arc<Sampler>,
 }
 
 struct InstanceAllocators {
@@ -208,7 +220,7 @@ fn create_graphics_pipeline(
         .entry_point("main")
         .unwrap();
 
-    let vertex_shader_input_state = [VertexPoint::per_vertex(), InstanceData::per_instance()]
+    let vertex_shader_input_state = [VertexData::per_vertex(), InstanceData::per_instance()]
         .definition(&vertex_shader.info().input_interface)
         .unwrap();
 
@@ -227,6 +239,16 @@ fn create_graphics_pipeline(
     unsafe {
         let set_layout = &mut descriptor_set_layout.set_layouts[PUSH_DESCRIPTOR_INDEX];
         set_layout.flags |= DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR;
+        set_layout.bindings.get_mut(&0).unwrap().immutable_samplers = vec![Sampler::new(
+            logical_device.clone(),
+            SamplerCreateInfo {
+                address_mode: [SamplerAddressMode::Repeat; 3],
+                mag_filter: vulkano::image::sampler::Filter::Linear,
+                min_filter: vulkano::image::sampler::Filter::Linear,
+                ..Default::default()
+            },
+        )
+        .unwrap()];
     }
 
     let mut descriptor_create_info = descriptor_set_layout
@@ -268,7 +290,7 @@ fn create_graphics_pipeline(
             }),
 
             // describes drawing primitives, default is a triangle
-            input_assembly_state: Some(InputAssemblyState{
+            input_assembly_state: Some(InputAssemblyState {
                 topology: graphics::input_assembly::PrimitiveTopology::TriangleList,
                 ..Default::default()
             }),
@@ -475,37 +497,41 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
     };
 
     let vertices = Vec::from([
-        VertexPoint {
+        VertexData {
             position: Vec3 {
                 x: -1.0,
                 y: -1.0,
                 z: -0.5,
             },
             color: color1.clone(),
+            tex_coord: Vec2 { x: 0.0, y: 0.0 },
         },
-        VertexPoint {
+        VertexData {
             position: Vec3 {
                 x: -1.0,
                 y: 1.0,
                 z: -0.5,
             },
             color: color2.clone(),
+            tex_coord: Vec2 { x: 0.0, y: 1.0 },
         },
-        VertexPoint {
+        VertexData {
             position: Vec3 {
                 x: 1.0,
                 y: 1.0,
                 z: -0.5,
             },
             color: color2.clone(),
+            tex_coord: Vec2 { x: 1.0, y: 1.0 },
         },
-        VertexPoint {
+        VertexData {
             position: Vec3 {
                 x: 1.0,
                 y: -1.0,
                 z: -0.5,
             },
             color: color3.clone(),
+            tex_coord: Vec2 { x: 1.0, y: 0.0 },
         },
     ]);
 
@@ -530,7 +556,21 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
     ]);
 
     let mut camera_position = glm::vec3(0.0, 0.0, 0.0);
-    // Data for uniform 1
+
+    let (image_object, mut image_buffer) = load_png_image(
+        instance.allocators.memory_allocator.clone(),
+        String::from("./sample.png"),
+    );
+    // let new_image = load_png_image(
+    //     instance.allocators.memory_allocator.clone(),
+    //     String::from("./sample.png"),
+    // );
+    let image_view = ImageView::new_default(image_object.clone()).unwrap();
+    let sampler_uniform =
+        UniformBuffer::create_immutable_sampler(0, instance.render_target.image_sampler.clone());
+    let texture_uniform = UniformBuffer::create_image_view(1, image_view.clone());
+
+    let mut first_buffer_write = true;
 
     el.set_control_flow(ControlFlow::Poll);
     let _ = el.run(|app_event, elwt| match app_event {
@@ -633,11 +673,20 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             // );
             let mut uni1 = UniformBuffer::create(
                 instance.allocators.memory_allocator.clone(),
-                1,
+                2,
                 data1,
                 Default::default(),
             );
             // }
+
+            let fb_image_buffer = {
+                if first_buffer_write {
+                    first_buffer_write = false;
+                    Some(image_buffer.clone())
+                } else {
+                    None
+                }
+            };
 
             let command_buffers = create_command_buffers(
                 &instance,
@@ -645,9 +694,12 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                 indicies.clone(),
                 // vec![uniform_set],
                 // vec![uni0, uni1],
-                vec![uni1],
+                vec![uni1, sampler_uniform.clone(), texture_uniform.clone()],
                 data,
                 instance_buffer_vec.clone(),
+                image_object.clone(),
+                fb_image_buffer,
+                //image_buffer
             );
 
             let (image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
@@ -1014,11 +1066,23 @@ fn refresh_render_target(
         .map(|img| create_framebuffer_object(render_pass.clone(), img.clone(), depth_image.clone()))
         .collect();
 
+    let sampler = Sampler::new(
+        device.clone(),
+        SamplerCreateInfo {
+            address_mode: [SamplerAddressMode::Repeat; 3],
+            min_filter: vulkano::image::sampler::Filter::Linear,
+            mag_filter: vulkano::image::sampler::Filter::Linear,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
     let graphics_pipeline =
         create_graphics_pipeline(window.clone(), device.clone(), render_pass.clone());
 
     RenderTargetInfo {
         pipeline: graphics_pipeline,
+        image_sampler: sampler,
         // render_pass: render_pass,
         fbos: fbos,
     }
@@ -1033,12 +1097,14 @@ fn refresh_render_target(
 */
 fn create_command_buffers(
     instance: &VulkanInstance,
-    vertex_data: Vec<VertexPoint>,
+    vertex_data: Vec<VertexData>,
     index_data: Vec<u32>,
     // uniform_sets: Vec<UniformSet>,
     uniforms: Vec<UniformBuffer>,
     push_constant_data: shaders::vs::PushConstantData, // uniform_buffer_data: graphics_pack::shaders::vs::Data,
     instance_data: Vec<InstanceData>,
+    image_object: Arc<Image>,
+    image_buffer: Option<image_buffer::ImageBuffer>,
 ) -> Vec<CommandBufferType> {
     // let uniforms_descriptor_set = UniformBuffer::get_descriptor_set(
     //     instance.get_logical_device(),
@@ -1086,9 +1152,10 @@ fn create_command_buffers(
         vertex_buffer,
         instance_buffer,
         index_buffer,
-        // uniform_buffer,
-        uniforms, // uniform_sets,
+        uniforms,
         push_constant_data,
+        image_object,
+        image_buffer,
     );
 
     return command_buffers;
@@ -1110,6 +1177,11 @@ fn build_fbo_command_buffers_for_pipeline(
     uniforms: Vec<UniformBuffer>,
     // uniform_sets: Vec<UniformSet>,
     push_constant_data: shaders::vs::PushConstantData,
+    // sampling_image: Arc<Image>,
+    // image_view: Arc<ImageView>, // This should be passed in the descriptor write, not here
+    image_object: Arc<Image>,
+    // image_buffer: Option<graphics_pack::buffers::image_buffer::ImageBuffer>,
+    image_buffer: Option<graphics_pack::buffers::image_buffer::ImageBuffer>,
 ) -> Vec<CommandBufferType> {
     let queue_family_index = queue.queue_family_index();
 
@@ -1131,6 +1203,16 @@ fn build_fbo_command_buffers_for_pipeline(
             )
             .unwrap();
 
+            if let Some(img_buffer) = image_buffer.clone() {
+                let (src_buffer, _) = img_buffer.clone().consume();
+                command_builder
+                    .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
+                        src_buffer,
+                        image_object.clone(),
+                    ))
+                    .unwrap();
+            }
+
             // FIXME: we are doing redundant copies for every framebuffer anyways
             let temp_vertex_buffer = vertex_buffer.clone();
             let (vertex_subbuffer, vertex_count) = temp_vertex_buffer.consume();
@@ -1140,6 +1222,14 @@ fn build_fbo_command_buffers_for_pipeline(
 
             let temp_index_buffer = index_buffer.clone();
             let (index_subbuffer, index_count) = temp_index_buffer.consume();
+
+            // TODO: Need to put the uploading of the image in a seperate upload buffer
+            // for the frame
+            // let texture_image_view = {
+            //     command_builder
+            //         .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(src_buffer, dst_img));
+            //     ImageView::new_default(image).unwrap()
+            // };
 
             // NOTE: This structure is only used to bind dynamic data to the graphics pipeline
             // Any modifications to the rendering stages have to be done in the
@@ -1224,8 +1314,64 @@ fn build_fbo_command_buffers_for_pipeline(
    clean.
 */
 
+// Creating a texture
+// 1. Create an image object and load the image data as bytes.
+// 2. Create an image view object and attach the image object with the image data to this image view.
+// 3. Create a sampler object
+// 4. Pass the image data and sampler object into the shader as uniforms.
+
+fn load_png_image(
+    allocator: GenericBufferAllocator,
+    path: String,
+) -> (
+    Arc<Image>,
+    graphics_pack::buffers::image_buffer::ImageBuffer,
+) {
+    // let raw_img = include_bytes!(path).as_slice();
+
+    // let img_path = std::path::Path::new(path.as_str());
+    // let img_file = std::fs::File::open(&img_path).unwrap();
+    let dynamic_image = image::io::Reader::open(path)
+        .unwrap()
+        .with_guessed_format()
+        .unwrap()
+        .decode()
+        .unwrap();
+    let image_dimensions = dynamic_image.dimensions();
+
+    let img_src_buffer = buffers::image_buffer::ImageBuffer::new(
+        allocator.clone(),
+        // img_buffer,
+        dynamic_image.into_rgba8().into_vec(),
+        [image_dimensions.0, image_dimensions.1, 4],
+    );
+    println!("Image size: {} {}", image_dimensions.0, image_dimensions.1);
+
+    // let (src_buffer, _) = img_src_buffer.consume();
+
+    let dst_img: Arc<Image> = Image::new(
+        allocator.clone(),
+        ImageCreateInfo {
+            usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+            image_type: vulkano::image::ImageType::Dim2d,
+            extent: [image_dimensions.0, image_dimensions.1, 1],
+            format: vulkano::format::Format::R8G8B8A8_SRGB,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    return (dst_img, img_src_buffer);
+}
+
+fn create_image_view_from_buffer(buffer: graphics_pack::buffers::image_buffer::ImageBuffer) {}
+
 fn main() {
-    std::env::set_var("WINIT_UNIX_BACKEND", "x11");
+    // std::env::set_var("WINIT_UNIX_BACKEND", "x11");
     unsafe {
         START = Some(SystemTime::now());
     }

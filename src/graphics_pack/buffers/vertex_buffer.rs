@@ -2,14 +2,14 @@ use vulkano::buffer::{Buffer, BufferUsage, IndexType, Subbuffer};
 
 use crate::graphics_pack::buffers::{
     base_buffer::{self, BufferOptions, GenericBufferAllocator, VecBuffer, VecBufferOps},
-    primitives::{InstanceData, VertexPoint},
+    primitives::{InstanceData, VertexData},
 };
 
 use super::base_buffer::create_buffer_from_vec;
 
 #[derive(Clone)]
 pub struct VertexBuffer {
-    pub buffer: VecBuffer<VertexPoint>,
+    pub buffer: VecBuffer<VertexData>,
     pub vertices: u32,
 }
 
@@ -19,12 +19,12 @@ pub struct InstanceBuffer {
     pub instances: u32,
 }
 
-impl VecBufferOps<VertexPoint> for VertexBuffer {
+impl VecBufferOps<VertexData> for VertexBuffer {
     type BufferAllocator = GenericBufferAllocator;
 
     fn from_vec(
         allocator: GenericBufferAllocator,
-        vertices: Vec<VertexPoint>,
+        vertices: Vec<VertexData>,
         options: BufferOptions,
     ) -> Option<Self> {
         let vertex_count = vertices.len();
@@ -44,20 +44,20 @@ impl VecBufferOps<VertexPoint> for VertexBuffer {
         })
     }
 
-    fn consume(self) -> (Subbuffer<[VertexPoint]>, u32) {
+    fn consume(self) -> (Subbuffer<[VertexData]>, u32) {
         (self.buffer.raw_buffer, self.vertices)
     }
 
-    fn from_data(
-        allocator: GenericBufferAllocator,
-        data: VertexPoint,
-        options: BufferOptions,
-    ) -> Option<Self>
-    where
-        Self: Sized,
-    {
-        None
-    }
+    // fn from_data(
+    //     allocator: GenericBufferAllocator,
+    //     data: VertexPoint,
+    //     options: BufferOptions,
+    // ) -> Option<Self>
+    // where
+    //     Self: Sized,
+    // {
+    //     None
+    // }
 }
 
 impl VecBufferOps<InstanceData> for InstanceBuffer {
@@ -88,16 +88,16 @@ impl VecBufferOps<InstanceData> for InstanceBuffer {
         })
     }
 
-    fn from_data(
-        allocator: Self::BufferAllocator,
-        data: InstanceData,
-        options: BufferOptions,
-    ) -> Option<Self>
-    where
-        Self: Sized,
-    {
-        None
-    }
+    // fn from_data(
+    //     allocator: Self::BufferAllocator,
+    //     data: InstanceData,
+    //     options: BufferOptions,
+    // ) -> Option<Self>
+    // where
+    //     Self: Sized,
+    // {
+    //     None
+    // }
 
     fn consume(self) -> (Subbuffer<[InstanceData]>, u32) {
         (self.buffer.raw_buffer, self.instances)

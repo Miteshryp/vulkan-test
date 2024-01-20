@@ -4,7 +4,7 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, GenericMemoryAllocator, MemoryTypeFilter}, descriptor_set::allocator::StandardDescriptorSetAllocator,
 };
 
-use super::{VertexPoint, primitives::Vec3};
+use super::{VertexData, primitives::Vec3};
 
 pub type GenericBufferAllocator =
     Arc<GenericMemoryAllocator<vulkano::memory::allocator::FreeListAllocator>>;
@@ -110,6 +110,6 @@ pub trait VecBufferOps<T>
     // so that we may implement staging buffers of different types
     // with ease in the future.
     fn from_vec(allocator: Self::BufferAllocator, data: Vec<T>, options: BufferOptions) -> Option<Self> where Self: Sized;
-    fn from_data(allocator: Self::BufferAllocator, data: T, options: BufferOptions) -> Option<Self> where Self: Sized;
+    // fn from_data(allocator: Self::BufferAllocator, data: T, options: BufferOptions) -> Option<Self> where Self: Sized;
     fn consume(self) -> (Subbuffer<[T]>, u32);
 }
