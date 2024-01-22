@@ -24,7 +24,7 @@ impl VecBufferOps<u32> for IndexBuffer {
     
     fn from_vec(
         allocator: GenericBufferAllocator,
-        indicies: Vec<u32>, 
+        indicies: &Vec<u32>, 
         options: BufferOptions
     ) -> Option<Self> where Self: Sized {
         let index_count = indicies.len();

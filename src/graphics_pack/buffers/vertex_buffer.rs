@@ -24,7 +24,7 @@ impl VecBufferOps<VertexData> for VertexBuffer {
 
     fn from_vec(
         allocator: GenericBufferAllocator,
-        vertices: Vec<VertexData>,
+        vertices: &Vec<VertexData>,
         options: BufferOptions,
     ) -> Option<Self> {
         let vertex_count = vertices.len();
@@ -65,7 +65,7 @@ impl VecBufferOps<InstanceData> for InstanceBuffer {
 
     fn from_vec(
         allocator: Self::BufferAllocator,
-        data: Vec<InstanceData>,
+        data: &Vec<InstanceData>,
         options: BufferOptions,
     ) -> Option<Self>
     where

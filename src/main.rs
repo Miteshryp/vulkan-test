@@ -21,7 +21,7 @@ use graphics_pack::{
 
 use std::{io::Read, process::exit, sync::Arc, time::SystemTime};
 use vulkano::{
-    buffer::BufferContents,
+    buffer::{BufferContents, Subbuffer},
     command_buffer::{
         allocator::{
             CommandBufferAllocator, StandardCommandBufferAllocator,
@@ -541,7 +541,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             global_position: Vec3 {
                 x: 0.0,
                 y: 1.7,
-                z: 3.0,
+                z: -3.0,
             },
             local_scale: 1.0,
         },
@@ -549,7 +549,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             global_position: Vec3 {
                 x: 0.0,
                 y: 4.7,
-                z: 3.0,
+                z: -3.0,
             },
             local_scale: 1.4,
         },
@@ -1119,30 +1119,24 @@ fn create_command_buffers(
 
     let vertex_buffer = VertexBuffer::from_vec(
         instance.allocators.memory_allocator.clone(),
-        vertex_data,
+        &vertex_data,
         Default::default(),
     )
     .unwrap();
 
     let instance_buffer = InstanceBuffer::from_vec(
         instance.allocators.memory_allocator.clone(),
-        instance_data,
+        &instance_data,
         Default::default(),
     )
     .unwrap();
 
     let index_buffer: IndexBuffer = graphics_pack::buffers::IndexBuffer::from_vec(
         instance.allocators.memory_allocator.clone(),
-        index_data,
+        &index_data,
         Default::default(),
     )
     .unwrap();
-
-    let mut f = 0.0;
-    unsafe {
-        f = START.unwrap().elapsed().unwrap().as_secs_f32() as f32; //std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as f32;
-    }
-    // println!("{f}");
 
     let command_buffers = build_fbo_command_buffers_for_pipeline(
         instance.allocators.command_buffer_allocator.clone(),
@@ -1169,7 +1163,6 @@ fn build_fbo_command_buffers_for_pipeline(
     graphics_pipeline: Arc<GraphicsPipeline>,
     fbos: &Vec<Arc<Framebuffer>>,
 
-    // vertex_buffer: Subbuffer<[vertex::VertexPoint]>,
     vertex_buffer: VertexBuffer,
     instance_buffer: InstanceBuffer,
     index_buffer: IndexBuffer,
@@ -1177,10 +1170,8 @@ fn build_fbo_command_buffers_for_pipeline(
     uniforms: Vec<UniformBuffer>,
     // uniform_sets: Vec<UniformSet>,
     push_constant_data: shaders::vs::PushConstantData,
-    // sampling_image: Arc<Image>,
     // image_view: Arc<ImageView>, // This should be passed in the descriptor write, not here
     image_object: Arc<Image>,
-    // image_buffer: Option<graphics_pack::buffers::image_buffer::ImageBuffer>,
     image_buffer: Option<graphics_pack::buffers::image_buffer::ImageBuffer>,
 ) -> Vec<CommandBufferType> {
     let queue_family_index = queue.queue_family_index();
@@ -1314,12 +1305,6 @@ fn build_fbo_command_buffers_for_pipeline(
    clean.
 */
 
-// Creating a texture
-// 1. Create an image object and load the image data as bytes.
-// 2. Create an image view object and attach the image object with the image data to this image view.
-// 3. Create a sampler object
-// 4. Pass the image data and sampler object into the shader as uniforms.
-
 fn load_png_image(
     allocator: GenericBufferAllocator,
     path: String,
@@ -1342,11 +1327,11 @@ fn load_png_image(
     let img_src_buffer = buffers::image_buffer::ImageBuffer::new(
         allocator.clone(),
         // img_buffer,
-        dynamic_image.into_rgba8().into_vec(),
+        &dynamic_image.into_rgba8().into_vec(),
         [image_dimensions.0, image_dimensions.1, 4],
     );
     println!("Image size: {} {}", image_dimensions.0, image_dimensions.1);
-
+    
     // let (src_buffer, _) = img_src_buffer.consume();
 
     let dst_img: Arc<Image> = Image::new(
@@ -1367,6 +1352,18 @@ fn load_png_image(
 
     return (dst_img, img_src_buffer);
 }
+
+// different - image object parameters, buffer size
+
+// Model 1 - 
+// 1. create image data buffer with appropriate size to contain data of imageS.
+// 2. add single image to created buffer
+// 3. create image object and image view from the buffer data (Image buffer needs extra parameters for this, basically needs to be revamped entirely)
+// 4. pass image and buffer into the command builder function to copy the data
+
+// Model 2 -
+// 1. Create a load_png_image_array function, which returns a image object configured to store texture array and buffer with the image data
+// 2. pass the buffer and image into the rendering function
 
 fn create_image_view_from_buffer(buffer: graphics_pack::buffers::image_buffer::ImageBuffer) {}
 

@@ -130,6 +130,12 @@ impl UniformBuffer {
         }
     }
 
+    pub fn create_image_view_array(binding_index: u32, image_view: &Vec<Arc<ImageView>>) -> UniformBuffer {
+        Self {
+            descriptor_set: WriteDescriptorSet::image_view_array(binding_index, 0, image_view.to_vec())
+        }
+    }
+
     pub fn create<T>(
         buffer_allocator: GenericBufferAllocator,
         binding_index: u32,

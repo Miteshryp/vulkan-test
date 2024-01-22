@@ -34,15 +34,16 @@ impl Default for BufferOptions {
 pub fn create_buffer_from_vec<T>(
     allocator: GenericBufferAllocator,
     // iter: I,
-    data: Vec<T>,
+    data: &Vec<T>,
     buffer_usage: BufferUsage,
     memory_type_filter: MemoryTypeFilter,
 ) -> Subbuffer<[T]>
 where
-    T: BufferContents,
+    T: BufferContents + Clone,
     // I: IntoIterator<Item = T>,
     // I::IntoIter: ExactSizeIterator,
 {
+
     vulkano::buffer::Buffer::from_iter(
         allocator.clone(),
         BufferCreateInfo {
@@ -53,7 +54,7 @@ where
             memory_type_filter: memory_type_filter,
             ..Default::default()
         },
-        data.into_iter(),
+        data.into_iter().cloned(),
     )
     .unwrap()
 }
@@ -109,7 +110,7 @@ pub trait VecBufferOps<T>
     // We are letting the user determine this field right
     // so that we may implement staging buffers of different types
     // with ease in the future.
-    fn from_vec(allocator: Self::BufferAllocator, data: Vec<T>, options: BufferOptions) -> Option<Self> where Self: Sized;
+    fn from_vec(allocator: Self::BufferAllocator, data: &Vec<T>, options: BufferOptions) -> Option<Self> where Self: Sized;
     // fn from_data(allocator: Self::BufferAllocator, data: T, options: BufferOptions) -> Option<Self> where Self: Sized;
     fn consume(self) -> (Subbuffer<[T]>, u32);
 }
