@@ -1,53 +1,33 @@
 use std::sync::Arc;
 
 use winit::{
-    window::{Window},
-    event_loop::{
-        self, ControlFlow, DeviceEvents, EventLoop, EventLoopBuilder, EventLoopWindowTarget,
-    },
+    event_loop::EventLoop, window::{Window}
 };
 
 use vulkano::{
-    buffer::{BufferContents, BufferUsage, Subbuffer},
     command_buffer::{
         allocator::{
-            CommandBufferAllocator, StandardCommandBufferAllocator,
+            StandardCommandBufferAllocator,
             StandardCommandBufferAllocatorCreateInfo,
         },
         AutoCommandBufferBuilder, CommandBufferLevel, CommandBufferUsage, CopyBufferInfo,
-        CopyBufferToImageInfo, CopyImageToBufferInfo, PrimaryAutoCommandBuffer,
-        PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents,
+        PrimaryAutoCommandBuffer,
+        PrimaryCommandBufferAbstract,
     },
     descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, layout::DescriptorSetLayoutCreateFlags,
-        persistent, PersistentDescriptorSet, WriteDescriptorSet,
+        allocator::StandardDescriptorSetAllocator, 
     },
     device::{
         physical::{self, PhysicalDeviceType},
-        Device, DeviceCreateInfo, DeviceExtensions, Features, Properties, Queue, QueueCreateInfo,
-        QueueFamilyProperties, QueueFlags,
+        Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo,
+        QueueFlags,
     },
 
-    pipeline::{
-        graphics::{
-            self,
-            color_blend::{ColorBlendAttachmentState, ColorBlendState},
-            depth_stencil::{self, DepthState, DepthStencilState, StencilState},
-            input_assembly::InputAssemblyState,
-            rasterization::{FrontFace, RasterizationState},
-            vertex_input::{Vertex, VertexDefinition},
-            viewport::{Viewport, ViewportState},
-            GraphicsPipelineCreateInfo,
-        },
-        layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo},
-        GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout,
-        PipelineShaderStageCreateInfo,
-    },
-
+    pipeline::GraphicsPipeline,
     image::{
         sampler::{Sampler, SamplerAddressMode, SamplerCreateInfo},
         view::ImageView,
-        Image, ImageCreateInfo, ImageType, ImageUsage,
+        Image, ImageCreateInfo, ImageUsage,
     },
 
     instance::InstanceCreateInfo,

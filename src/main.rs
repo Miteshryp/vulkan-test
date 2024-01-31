@@ -10,7 +10,7 @@ use nalgebra_glm as glm;
 use graphics_pack::{
     buffers::{
         self,
-        base_buffer::{DeviceBuffer, StagingBuffer, StagingBufferMap},
+        base_buffer::{DeviceBuffer, StagingBuffer},
         primitives::{InstanceData, Vec2, Vec3, VertexData},
         uniform_buffer::{UniformBuffer, UniformSet},
     },
@@ -33,45 +33,19 @@ use vulkano::{
         CopyBufferToImageInfo, CopyImageToBufferInfo, PrimaryAutoCommandBuffer,
         PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents,
     },
-    descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, layout::DescriptorSetLayoutCreateFlags,
-        persistent, PersistentDescriptorSet, WriteDescriptorSet,
-    },
-    device::{
-        physical::{self, PhysicalDeviceType},
-        Device, DeviceCreateInfo, DeviceExtensions, Features, Properties, Queue, QueueCreateInfo,
-        QueueFamilyProperties, QueueFlags,
-    },
     image::{
         sampler::{Sampler, SamplerAddressMode, SamplerCreateInfo},
         view::ImageView,
         Image, ImageCreateInfo, ImageType, ImageUsage,
     },
     instance::InstanceCreateInfo,
-    memory::{
-        allocator::{
+    memory::allocator::{
             AllocationCreateInfo, GenericMemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
         },
-        MemoryType,
-    },
     pipeline::{
-        graphics::{
-            self,
-            color_blend::{ColorBlendAttachmentState, ColorBlendState},
-            depth_stencil::{self, DepthState, DepthStencilState, StencilState},
-            input_assembly::InputAssemblyState,
-            rasterization::{FrontFace, RasterizationState},
-            vertex_input::{Vertex, VertexDefinition},
-            viewport::{Viewport, ViewportState},
-            GraphicsPipelineCreateInfo,
-        },
-        layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo},
-        GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout,
-        PipelineShaderStageCreateInfo,
+        Pipeline, PipelineBindPoint,
     },
-    render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
-    shader::{self, spirv::LoopControl, EntryPoint},
-    swapchain::{self, Surface, SurfaceInfo, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo},
+    swapchain::{self, SwapchainPresentInfo},
     sync::{self, GpuFuture},
     Validated, Version, VulkanError, VulkanLibrary,
 };
@@ -102,8 +76,6 @@ struct BufferUploader {
     // command_builder: AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     command_builder: PrimaryAutoCommandBuilderType,
     buffer_allocator: GenericBufferAllocator,
-
-    frame_map: Vec<StagingBufferMap>,
 }
 
 impl BufferUploader {
@@ -122,7 +94,6 @@ impl BufferUploader {
             .unwrap(),
 
             buffer_allocator: buffer_allocator,
-            frame_map: vec![],
         }
     }
 
@@ -137,13 +108,8 @@ impl BufferUploader {
 
         // Create a mapping object and store it vec of mappings
         self.command_builder
-            .copy_buffer(CopyBufferInfo::buffers(host_buffer, device_buffer.clone()));
+            .copy_buffer(CopyBufferInfo::buffers(host_buffer, device_buffer.clone())).unwrap();
 
-        // let upload_mapping = StagingBufferMap {
-        //     host_buffer: host_buffer.clone().into_bytes(),
-        //     device_buffer: device_buffer.clone().into_bytes(),
-        // };
-        // self.frame_map.push(upload_mapping);
 
         // return the device buffer for further usage in the rendering command buffer.
         DeviceBuffer {
@@ -295,7 +261,7 @@ fn winit_handle_window_events(
 fn create_window() -> (Arc<Window>, EventLoop<()>) {
     // let winit_event_loop = event_loop::EventLoop::new().unwrap();
 
-    // INFO Forcing X11 usage due to driver incompatibility with wayland
+    // INFO: Forcing X11 usage due to driver incompatibility with wayland
     // vulkan. Wayland vulkan is crashing consistently, even the vkcube-wayland fails.
 
     let mut winit_event_loop: Option<EventLoop<()>> = None;
