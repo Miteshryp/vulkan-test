@@ -1,19 +1,11 @@
 
 # TODAY's GOALS
-[x] Texture rendering in shaders
+
+[x] Restructure the entire codebase into appropriate modules (Staging and Rendering buffers)
+[x] Find a way to solve the buffer interface problem
 
 
-Steps for texture rendering
-1. [x] Load the image data into the memory buffer - load_png_image function
-2. [x] Create and store the data into a vulkan source buffer for the image data - load_png_image function
-3. [x] Create an Vulkan image object
-4. [x] Transfer the image data into the image object
-5. [x] Bind the image object to an image view
-6. [x] Bind the image view to the texture2D object in the descriptor set
-7. [x] Create a Sampler object and pass it in as a sampler parameter in the descriptor set
-8. [x] Pass the descriptor writes into the command buffer
-9. [x] Create a new vertex attribute taking the texture coordinate for the mapping
-10. [x] Use the texture coordinate attribute to sample the texture onto the point in the fragment shader (Sampler coords are btw 0-1)
+[] texture array rendering (Similar to texture rendering)
 
 ### VULKAN WEBSITE STEPS TO CREATE A TEXTURE IMAGE
 - Create an image object backed by device memory

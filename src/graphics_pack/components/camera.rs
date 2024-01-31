@@ -3,7 +3,7 @@ use std::sync::Arc;
 use nalgebra_glm as glm;
 use vulkano::descriptor_set::PersistentDescriptorSet;
 
-use crate::graphics_pack::buffers::UniformSet;
+// use crate::graphics_pack::buffers::UniformSet;
 
 // TODO: Camera manager is required if I just store the parameters of the
 // projection matrix in the camera struct.
