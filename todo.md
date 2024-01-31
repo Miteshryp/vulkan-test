@@ -1,20 +1,14 @@
 
 # TODAY's GOALS
 
-[x] Restructure the entire codebase into appropriate modules (Staging and Rendering buffers)
-[x] Find a way to solve the buffer interface problem
-
-
 [] texture array rendering (Similar to texture rendering)
 
-### VULKAN WEBSITE STEPS TO CREATE A TEXTURE IMAGE
-- Create an image object backed by device memory
-- Fill it with pixels from an image file
-- Create an image sampler
-- Add a combined image sampler descriptor to sample colors from the texture
+
+
 
 ### QUESTIONS
 1. Can we modify the contents of an image after binding it to an image view object?
+Guess - We should be able to do this since an image is just a location in memory, which is bound to a image view object. So image view should just contain the pointer to the image data. Us modifying the image data should not have any difference in the image view operation.
 
 ### LOW PRIORITY
 [x] Solve the global store problem in rust. - Will be solved using plugins (like in nest.js)
@@ -39,9 +33,6 @@
 [] Learn about writing macros in rust
 [] Explore the vulkan and SPIR-V sdk tools
 [] Explore NVRHI
-
-# WORKAROUNDS
-- [] Renderdoc integration for shader debugging - FAILED (binding not working with renderdoc 1.30)
 
 
 ## RESOURCES
