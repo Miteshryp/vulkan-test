@@ -1,6 +1,22 @@
-// use glm::translate;
-use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex};
-// extern crate nalgebra_glm as glm;
+use std::sync::Arc;
+
+use vulkano::{buffer::BufferContents, command_buffer::{allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, PrimaryAutoCommandBuffer}, descriptor_set::allocator::StandardDescriptorSetAllocator, memory::allocator::GenericMemoryAllocator, pipeline::graphics::vertex_input::Vertex};
+
+
+// Buffer type declarations
+pub type GenericBufferAllocator =
+    Arc<GenericMemoryAllocator<vulkano::memory::allocator::FreeListAllocator>>;
+pub type DescriptorSetAllocator = Arc<StandardDescriptorSetAllocator>;
+
+
+// Command builder types
+pub type CommandBufferType = Arc<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>>;
+
+pub type PrimaryAutoCommandBuilderType = AutoCommandBufferBuilder<
+    PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>,
+    Arc<StandardCommandBufferAllocator>,
+>;
+
 
 #[derive(BufferContents, Clone, Vertex, Debug)]
 #[repr(C)]
@@ -12,7 +28,7 @@ pub struct VertexData {
     pub color: Vec3,
 
     #[format(R32G32_SFLOAT)]
-    pub tex_coord: Vec2
+    pub tex_coord: Vec2,   
 }
 
 #[derive(BufferContents, Vertex, Debug, Clone)]
@@ -24,42 +40,22 @@ pub struct InstanceData {
     #[format(R32_SFLOAT)]
     pub local_scale: f32,
 
+    #[format(R32_UINT)]
+    pub tex_index: u32,
+
 }
-
-// fn test() {
-//     let pos = glm::vec4(1.0, 1.0, 1.0, 1.0);
-
-//     let mut model: glm::Mat4 = glm::identity(); // object position
-//     model = glm::translate(&model, &glm::vec3(1.0, 1.0, 1.0));
-
-//     let mut view: glm::Mat4 = glm::identity(); // camera position
-//     view = glm::look_at(&glm::vec3(0.0,0.0,0.0), &glm::vec3(0.0,0.0,1.0), &glm::vec3(0.0,1.0,0.0));
-
-//     let projection: glm::Mat4 = glm::perspective(16.0 / 9.0, std::f32::consts::PI / 4.0, 0.1, 1000.0);
-
-//     let final_pos: glm::Vec4 = (model * view * projection * pos).into();
-// }
 
 #[derive(BufferContents, Clone, Debug)]
 #[repr(C)]
 pub struct Vec3 {
-    // #[format(R32_SFLOAT)] // single f32 value
     pub x: f32,
-
-    // #[format(R32_SFLOAT)] // single f32 value
     pub y: f32,
-
-    // #[format(R32_SFLOAT)] // single f32 value
     pub z: f32,
 }
 
 #[derive(BufferContents, Clone, Debug)]
 #[repr(C)]
 pub struct Vec2 {
-    // #[format(R32_SFLOAT)] // single f32 value
     pub x: f32,
-
-    // #[format(R32_SFLOAT)] // single f32 value
     pub y: f32,
-
 }

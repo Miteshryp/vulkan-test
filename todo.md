@@ -1,8 +1,8 @@
 
 # TODAY's GOALS
 
-[] texture array rendering (Similar to texture rendering)
-
+[x] texture array rendering (Similar to texture rendering)
+    - [x] Implement Image and Image Array structures to be passed into the Uploader
 
 
 

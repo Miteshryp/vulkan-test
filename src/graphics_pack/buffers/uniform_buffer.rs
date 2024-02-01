@@ -12,6 +12,8 @@ use vulkano::{
 
 use crate::graphics_pack::buffers::base_buffer::*;
 
+use super::primitives::GenericBufferAllocator;
+
 // INFO: New uniform buffer structure
 // Step 1: UniformSet is a cover struct which will store all uniform buffers with the same set index
 // Step 2: Each buffer in a single uniform set will have a different binding index (based on order of submission)
