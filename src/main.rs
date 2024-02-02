@@ -12,9 +12,9 @@ use graphics_pack::{
         self, base_buffer::{DeviceBuffer, StagingBuffer}, image_buffer::{StagingImageArrayBuffer, StagingImageBuffer}, primitives::{CommandBufferType, InstanceData, Vec2, Vec3, VertexData}, uniform_buffer::{UniformBuffer, UniformSet}
     },
     components::{
-        camera, uploader::BufferUploader, vulkan::{VulkanInstance, VulkanSwapchainInfo}
+        camera::{self, Camera}, uploader::BufferUploader, vulkan::{VulkanInstance, VulkanSwapchainInfo}
     },
-    shaders::{self, fs},
+    shaders::{self, deferred},
 };
 
 use std::{io::Read, process::exit, sync::Arc, time::SystemTime};
@@ -80,7 +80,8 @@ fn winit_handle_window_events(
     // key_event: RawKeyEvent,
     window_target: &EventLoopWindowTarget<()>,
     // view_matrix: &mut glm::TMat4<f32>,
-    camera: &mut glm::TVec3<f32>,
+    // camera: &mut glm::TVec3<f32>,
+    camera: &mut Camera
 ) {
     let mut modifiers = ModifiersState::default();
 
@@ -121,25 +122,29 @@ fn winit_handle_window_events(
                 Key::Character("w") => {
                     println!("Forward");
                     unsafe {
-                        camera.z -= MOVE_SPEED;
+                        // camera.z -= MOVE_SPEED;
+                        camera.move_forward(MOVE_SPEED);
                     }
                 }
                 Key::Character("a") => {
                     println!("Left");
                     unsafe {
-                        camera.x -= MOVE_SPEED;
+                        // camera.x -= MOVE_SPEED;
+                        camera.move_left(MOVE_SPEED);
                     }
                 }
                 Key::Character("s") => {
                     println!("Backward");
                     unsafe {
-                        camera.z += MOVE_SPEED;
+                        // camera.z += MOVE_SPEED;
+                        camera.move_backward(MOVE_SPEED);
                     }
                 }
                 Key::Character("d") => {
                     println!("Right");
                     unsafe {
-                        camera.x += MOVE_SPEED;
+                        // camera.x += MOVE_SPEED;
+                        camera.move_right(MOVE_SPEED);
                     }
                 }
                 _ => (),
@@ -304,7 +309,8 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
     let (vertices, indicies, instance_buffer_vec) = create_data();
     
-    let mut camera_position = glm::vec3(0.0, 0.0, 0.0);
+    // let mut camera_position = glm::vec3(0.0, 0.0, 0.0);
+    let mut camera = Camera::new(glm::vec3(0.0,0.0,0.0), glm::vec3(0.0,0.0,-1.0), glm::vec3(0.0,1.0,0.0), std::f32::consts::FRAC_PI_4, window.inner_size().width as f32 / window.inner_size().height as f32, 0.01, 1000.0);
 
     // Creating texture array
     let image1 = load_image(String::from("./sample1.png"));
@@ -358,7 +364,10 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             device_id,
             event: DeviceEvent::MouseMotion { delta },
         } => {
-            // println!("Mouse moved: {:?}", delta);
+            let senX = 0.5;
+            let senY = 0.3;
+            camera.rotate(delta.0 as f32 * senX, delta.1 as f32 * senY);
+            println!("Mouse moved: {:?}", delta);
             // Rotate the mouse based on this (delta / sensitivity_factor)
         }
 
@@ -366,26 +375,29 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             event: WindowEvent::RedrawRequested,
             ..
         } => {
-            let mut model = glm::identity::<f32, 4>();
-            model = glm::translate(&model, &glm::vec3(0.1, 0.0, 0.0));
+
+            // let mut model = glm::identity::<f32, 4>();
+            // model = glm::translate(&model, &glm::vec3(0.1, 0.0, 0.0));
             // model = glm::scale(&model, &glm::vec3(10.0,10.0,10.0));
 
-            let mut view = glm::look_at(
-                &camera_position,
-                &glm::vec3(
-                    camera_position.x,
-                    camera_position.y,
-                    camera_position.z + -0.01,
-                ),
-                &glm::vec3(0.0, 1.0, 0.0),
-            );
+            // let mut view = glm::look_at(
+            //     // &camera_position,
 
-            let projection = glm::perspective(
-                (window.inner_size().width / window.inner_size().height) as f32,
-                std::f32::consts::PI / 4.0,
-                0.01,
-                -1000.0,
-            );
+            //     &glm::vec3(
+            //         camera_position.x,
+            //         camera_position.y,
+            //         camera_position.z + -0.01,
+            //     ),
+            //     &glm::vec3(0.0, 1.0, 0.0),
+            // );
+
+
+            // let projection = glm::perspective(
+            //     (window.inner_size().width / window.inner_size().height) as f32,
+            //     std::f32::consts::PI / 4.0,
+            //     0.01,
+            //     -1000.0,
+            // );
             // draw call
 
             if window_resized || recreate_swapchain {
@@ -412,7 +424,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             // {
 
             // let mut data = shaders::vs::Data {
-            let mut data = shaders::vs::PushConstantData {
+            let mut data = shaders::deferred::vs::PushConstantData {
                 view: unsafe { START.unwrap().elapsed().unwrap().as_secs_f32() },
             };
 
@@ -430,13 +442,25 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             // );
             // }
 
+
+            // let mut model = glm::identi();
+            // let mut view = camera.get_view_matrix_data();
+            // let mut projection = camera.get_projection_matrix_data();
+
             // uniform 1
             // {
-            let mut data1 = shaders::vs::MvpMatrix {
+
+            let model = glm::identity::<f32,4>();
+            let view = camera.get_view_matrix_data();
+            let projection = camera.get_projection_matrix_data();
+
+            let mut data1 = shaders::deferred::vs::MvpMatrix {
                 model: Into::<[[f32; 4]; 4]>::into(model),
                 view: Into::<[[f32; 4]; 4]>::into(view),
                 projection: Into::<[[f32; 4]; 4]>::into(projection),
             };
+
+            println!("{:?}", view);
 
             // uniform_set.add_uniform_buffer(
             //     instance.allocators.memory_allocator.clone(),
@@ -569,7 +593,8 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             event, // event: WindowEvent::KeyboardInput { event, .. },
         } => {
             if window_id == window.id() {
-                winit_handle_window_events(event, elwt, &mut camera_position);
+                // winit_handle_window_events(event, elwt, &mut camera_position);
+                winit_handle_window_events(event, elwt, &mut camera);
             }
         }
         Event::LoopExiting => {
@@ -602,7 +627,7 @@ fn create_command_buffers(
     device_instance_buffer: DeviceBuffer<InstanceData>,
 
     uniforms: Vec<UniformBuffer>,
-    push_constant_data: shaders::vs::PushConstantData, // uniform_buffer_data: graphics_pack::shaders::vs::Data,
+    push_constant_data: shaders::deferred::vs::PushConstantData, // uniform_buffer_data: graphics_pack::shaders::vs::Data,
 ) -> Vec<CommandBufferType> {
 
     // TODO:

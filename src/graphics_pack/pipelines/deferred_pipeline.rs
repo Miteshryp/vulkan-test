@@ -22,31 +22,39 @@ use vulkano::{
 };
 use winit::window::Window;
 
-use crate::graphics_pack::{buffers::primitives::*, pipelines::base_pipeline, shaders};
+use crate::graphics_pack::{
+    buffers::primitives::*, components::vulkan::VulkanSwapchainInfo, pipelines::base_pipeline,
+    shaders,
+};
 
-pub struct DefaultGraphicsPipeline {
-    pub pipeline: Arc<GraphicsPipeline>
+use super::{base_pipeline::GraphicsPipelineBuilder, renderpass::create_render_pass};
+
+pub struct DeferredPipeline {
+    pub pipeline: Arc<GraphicsPipeline>,
 }
 
 const PUSH_DESCRIPTOR_INDEX: usize = 1;
 
-impl base_pipeline::GraphicsPipelineBuilder for DefaultGraphicsPipeline {
+impl base_pipeline::GraphicsPipelineBuilder for DeferredPipeline {
     type NewPipeline = Self;
 
     fn new(
         window: Arc<Window>,
         logical_device: Arc<Device>,
         render_pass: Arc<RenderPass>,
-    ) -> DefaultGraphicsPipeline {
-        let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
+        // swapchain_info: &VulkanSwapchainInfo,
+        subpass_index: u32,
+    ) -> DeferredPipeline {
+        // let render_pass = create_render_pass(logical_device.clone(), swapchain_info);
+        let subpass = Subpass::from(render_pass.clone(), subpass_index).unwrap();
 
-        let vertex_shader: EntryPoint = shaders::get_vertex_shader(logical_device.clone())
+        let vertex_shader: EntryPoint = shaders::deferred::load_vertex_shader(logical_device.clone())
             .entry_point("main")
             .unwrap();
 
         // println!("Vertex Shader entry point info: {:?}", vertex_shader.info());
 
-        let fragment_shader = shaders::get_fragment_shader(logical_device.clone())
+        let fragment_shader = shaders::deferred::load_fragment_shader(logical_device.clone())
             .entry_point("main")
             .unwrap();
 
@@ -61,7 +69,6 @@ impl base_pipeline::GraphicsPipelineBuilder for DefaultGraphicsPipeline {
             PipelineShaderStageCreateInfo::new(fragment_shader),
         ];
 
-        let window_size = window.inner_size();
         let mut descriptor_set_layout =
             PipelineDescriptorSetLayoutCreateInfo::from_stages(&pipeline_stages);
 
@@ -81,7 +88,7 @@ impl base_pipeline::GraphicsPipelineBuilder for DefaultGraphicsPipeline {
             .unwrap()];
         }
 
-        let mut descriptor_create_info = descriptor_set_layout
+        let descriptor_create_info = descriptor_set_layout
             .into_pipeline_layout_create_info(logical_device.clone())
             .unwrap();
 
@@ -90,13 +97,9 @@ impl base_pipeline::GraphicsPipelineBuilder for DefaultGraphicsPipeline {
             PipelineLayout::new(logical_device.clone(), descriptor_create_info).unwrap();
 
         let depth_stencil = depth_stencil::DepthState::simple();
-        let rasterization_state_info: RasterizationState = RasterizationState {
-            cull_mode: graphics::rasterization::CullMode::Back,
-            front_face: FrontFace::CounterClockwise,
-            ..Default::default()
-        };
+        // let rasterization_state_info: RasterizationState = ;
 
-        DefaultGraphicsPipeline {
+        DeferredPipeline {
             pipeline: GraphicsPipeline::new(
                 logical_device,
                 None,
@@ -112,7 +115,7 @@ impl base_pipeline::GraphicsPipelineBuilder for DefaultGraphicsPipeline {
                     viewport_state: Some(ViewportState {
                         viewports: [Viewport {
                             offset: [0.0, 0.0],
-                            extent: window_size.into(),
+                            extent: window.inner_size().into(),
                             depth_range: 0.0..=1.0,
                         }]
                         .into_iter()
@@ -132,7 +135,11 @@ impl base_pipeline::GraphicsPipelineBuilder for DefaultGraphicsPipeline {
                     }),
 
                     // rasterization_state: Some(Default::default()),
-                    rasterization_state: Some(rasterization_state_info),
+                    rasterization_state: Some(RasterizationState {
+                        cull_mode: graphics::rasterization::CullMode::Back,
+                        front_face: FrontFace::CounterClockwise,
+                        ..Default::default()
+                    }),
                     multisample_state: Some(Default::default()),
                     color_blend_state: Some(ColorBlendState::with_attachment_states(
                         subpass.num_color_attachments(),

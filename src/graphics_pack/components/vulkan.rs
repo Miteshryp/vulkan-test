@@ -45,7 +45,7 @@ use vulkano::{
 };
 
 
-use crate::graphics_pack::pipelines::{base_pipeline::GraphicsPipelineBuilder, default_pipeline};
+use crate::graphics_pack::pipelines::{base_pipeline::GraphicsPipelineBuilder, deferred_pipeline, lighting_pipeline};
 
 // type name for buffer allocator
 type GenericBufferAllocator =
@@ -269,7 +269,9 @@ impl VulkanInstance {
         .unwrap();
     
         let graphics_pipeline =
-            default_pipeline::DefaultGraphicsPipeline::new(window.clone(), device.clone(), render_pass.clone());
+            deferred_pipeline::DeferredPipeline::new(window.clone(), device.clone(), render_pass.clone(), 0);
+        // let lighting_pipeline = 
+        //     lighting_pipeline::LightingPipeline::new(window.clone(), device.clone(), render_pass.clone(), 1);
     
         RenderTargetInfo {
             pipeline: graphics_pipeline.pipeline,
@@ -356,7 +358,8 @@ impl VulkanInstance {
         // need 3 things: device Arc, attachments, and a pass
         let format = swapchain_info.swapchain.create_info().image_format.clone();
 
-        vulkano::single_pass_renderpass!(
+        // vulkano::single_pass_renderpass!(
+        vulkano::ordered_passes_renderpass!(
             device.clone(),
             attachments: {
                 color: {
@@ -373,14 +376,23 @@ impl VulkanInstance {
                     store_op: DontCare
                 }
             },
-            pass: {
+
+            // pass: {
+            //     {
+            //         color: [color],
+            //         depth_stencil: {depth},
+            //     }
+            // }
+
+            passes: [{
                 color: [color],
-                // depth_stencil: {}
                 depth_stencil: {depth},
-            },
+                input: []
+            }],
         )
         .unwrap()
     }
+
 }
 
 fn create_swapchain(

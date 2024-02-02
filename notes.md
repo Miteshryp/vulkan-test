@@ -104,3 +104,15 @@ new buffer output, which could then be used to render onto the screen
 or can be given as an input in another render pass.
 
 
+Overview model:
+
+- Subpass 1
+    - Graphics pipeline functions
+        |
+        output 1
+- Subpass 2
+        input1 = output 1
+        |
+    - Graphics pipeline functions
+        |
+        output 2

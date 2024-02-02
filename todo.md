@@ -1,14 +1,12 @@
 
 # TODAY's GOALS
-
-[x] texture array rendering (Similar to texture rendering)
-    - [x] Implement Image and Image Array structures to be passed into the Uploader
-
-
+[x] 3D camera movement
+[] Multipass / Deffered rendering
 
 ### QUESTIONS
 1. Can we modify the contents of an image after binding it to an image view object?
 Guess - We should be able to do this since an image is just a location in memory, which is bound to a image view object. So image view should just contain the pointer to the image data. Us modifying the image data should not have any difference in the image view operation.
+
 
 ### LOW PRIORITY
 [x] Solve the global store problem in rust. - Will be solved using plugins (like in nest.js)
@@ -21,7 +19,6 @@ Guess - We should be able to do this since an image is just a location in memory
 
 
 # FUTURE GOALS
-[] Multipass / Deffered rendering
 [] Different types of lighting
 
 [] Indirect drawing
