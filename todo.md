@@ -1,6 +1,5 @@
 
 # TODAY's GOALS
-[x] 3D camera movement
 [] Multipass / Deffered rendering
 
 ### QUESTIONS
