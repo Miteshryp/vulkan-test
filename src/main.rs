@@ -9,10 +9,17 @@ use nalgebra_glm as glm;
 
 use graphics_pack::{
     buffers::{
-        self, base_buffer::{DeviceBuffer, StagingBuffer}, image_buffer::{StagingImageArrayBuffer, StagingImageBuffer}, primitives::{CommandBufferType, InstanceData, Vec2, Vec3, VertexData}, uniform_buffer::{UniformBuffer, UniformSet}
+        self,
+        base_buffer::{DeviceBuffer, StagingBuffer},
+        image_buffer::{StagingImageArrayBuffer, StagingImageBuffer},
+        primitives::{CommandBufferType, InstanceData, Vec2, Vec3, VertexData},
+        uniform_buffer::{UniformBuffer, UniformSet},
     },
     components::{
-        camera::{self, Camera}, uploader::BufferUploader, vulkan::{VulkanInstance, VulkanSwapchainInfo}
+        camera::{self, Camera},
+        input_handler::KeyboardInputHandler,
+        uploader::BufferUploader,
+        vulkan::{VulkanInstance, VulkanSwapchainInfo},
     },
     shaders::{self, deferred},
 };
@@ -36,11 +43,9 @@ use vulkano::{
     },
     instance::InstanceCreateInfo,
     memory::allocator::{
-            AllocationCreateInfo, GenericMemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
-        },
-    pipeline::{
-        Pipeline, PipelineBindPoint,
+        AllocationCreateInfo, GenericMemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
     },
+    pipeline::{Pipeline, PipelineBindPoint},
     swapchain::{self, SwapchainPresentInfo},
     sync::{self, GpuFuture},
     Validated, Version, VulkanError, VulkanLibrary,
@@ -64,7 +69,6 @@ use winit::{
 // type GenericBufferAllocator =
 //     Arc<GenericMemoryAllocator<vulkano::memory::allocator::FreeListAllocator>>;
 
-
 // type CommandBufferType = Arc<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>>;
 
 // type PrimaryAutoCommandBuilderType = AutoCommandBufferBuilder<
@@ -72,16 +76,13 @@ use winit::{
 //     Arc<StandardCommandBufferAllocator>,
 // >;
 
-
 #[allow(unused_variables)]
 #[allow(unused_assignments)]
 fn winit_handle_window_events(
     event: WindowEvent,
+    input_handler: &mut KeyboardInputHandler,
     // key_event: RawKeyEvent,
     window_target: &EventLoopWindowTarget<()>,
-    // view_matrix: &mut glm::TMat4<f32>,
-    // camera: &mut glm::TVec3<f32>,
-    camera: &mut Camera
 ) {
     let mut modifiers = ModifiersState::default();
 
@@ -117,40 +118,43 @@ fn winit_handle_window_events(
         // }
         WindowEvent::KeyboardInput {
             event: key_event, ..
-        } => match key_event.state {
-            ElementState::Pressed => match key_event.key_without_modifiers().as_ref() {
-                Key::Character("w") => {
-                    println!("Forward");
-                    unsafe {
-                        // camera.z -= MOVE_SPEED;
-                        camera.move_forward(MOVE_SPEED);
-                    }
-                }
-                Key::Character("a") => {
-                    println!("Left");
-                    unsafe {
-                        // camera.x -= MOVE_SPEED;
-                        camera.move_left(MOVE_SPEED);
-                    }
-                }
-                Key::Character("s") => {
-                    println!("Backward");
-                    unsafe {
-                        // camera.z += MOVE_SPEED;
-                        camera.move_backward(MOVE_SPEED);
-                    }
-                }
-                Key::Character("d") => {
-                    println!("Right");
-                    unsafe {
-                        // camera.x += MOVE_SPEED;
-                        camera.move_right(MOVE_SPEED);
-                    }
-                }
-                _ => (),
-            },
-            _ => (),
-        },
+        } => {
+            input_handler.update_input(key_event);
+        }
+        // match key_event.state {
+        //     ElementState::Pressed => match key_event.key_without_modifiers().as_ref() {
+        //         Key::Character("w") => {
+        //             println!("Forward");
+        //             unsafe {
+        //                 // camera.z -= MOVE_SPEED;
+        //                 camera.move_forward(MOVE_SPEED);
+        //             }
+        //         }
+        //         Key::Character("a") => {
+        //             println!("Left");
+        //             unsafe {
+        //                 // camera.x -= MOVE_SPEED;
+        //                 camera.move_left(MOVE_SPEED);
+        //             }
+        //         }
+        //         Key::Character("s") => {
+        //             println!("Backward");
+        //             unsafe {
+        //                 // camera.z += MOVE_SPEED;
+        //                 camera.move_backward(MOVE_SPEED);
+        //             }
+        //         }
+        //         Key::Character("d") => {
+        //             println!("Right");
+        //             unsafe {
+        //                 // camera.x += MOVE_SPEED;
+        //                 camera.move_right(MOVE_SPEED);
+        //             }
+        //         }
+        //         _ => (),
+        //     },
+        //     _ => (),
+        // },
         _ => (),
     }
     return;
@@ -188,9 +192,25 @@ fn winit_handle_window_events(
     // }
 }
 
-fn create_window() -> (Arc<Window>, EventLoop<()>) {
-    // let winit_event_loop = event_loop::EventLoop::new().unwrap();
+fn update_camera_position(camera: &mut Camera, input_handler: &KeyboardInputHandler) {
+    unsafe {
+        if(input_handler.is_pressed(KeyCode::KeyW)) {
+            camera.move_forward(MOVE_SPEED);
+        }
+        if(input_handler.is_pressed(KeyCode::KeyS)) {
+            camera.move_backward(MOVE_SPEED);
+        }
+        if(input_handler.is_pressed(KeyCode::KeyA)) {
+            camera.move_left(MOVE_SPEED);
+        }
+        if(input_handler.is_pressed(KeyCode::KeyD)) {
+            camera.move_right(MOVE_SPEED);
+        }
 
+    }
+}
+
+fn create_window() -> (Arc<Window>, EventLoop<()>) {
     // INFO: Forcing X11 usage due to driver incompatibility with wayland
     // vulkan. Wayland vulkan is crashing consistently, even the vkcube-wayland fails.
 
@@ -219,8 +239,149 @@ fn create_window() -> (Arc<Window>, EventLoop<()>) {
     (winit_window, winit_event_loop)
 }
 
+fn create_cube_vertices() -> (Vec<VertexData>, Vec<u32>) {
+    let color1 = Vec3::new(1.0, 0.0, 0.0);
+    let color2 = Vec3::new(0.0, 1.0, 0.0);
+    let color3 = Vec3::new(0.0, 0.0, 1.0);
 
-fn create_data() -> (Vec<VertexData>, Vec<u32>, Vec<InstanceData>) {
+    let vertices = Vec::from([
+        // front face
+        VertexData {
+            position: Vec3::new(-1.0, -1.0, 1.0),
+            color: color1.clone(),
+            tex_coord: Vec2::new(0.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, -1.0, 1.0),
+            color: color3.clone(),
+            tex_coord: Vec2::new(1.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, 1.0, 1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(1.0, 1.0),
+        },
+        VertexData {
+            position: Vec3::new(-1.0, 1.0, 1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(0.0, 1.0),
+        },
+        // Back face
+        VertexData {
+            position: Vec3::new(1.0, -1.0, -1.0),
+            color: color3.clone(),
+            tex_coord: Vec2::new(0.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(-1.0, -1.0, -1.0),
+            color: color1.clone(),
+            tex_coord: Vec2::new(1.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(-1.0, 1.0, -1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(1.0, 1.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, 1.0, -1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(0.0, 1.0),
+        },
+        // Left face
+        VertexData {
+            position: Vec3::new(-1.0, -1.0, -1.0),
+            color: color3.clone(),
+            tex_coord: Vec2::new(0.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(-1.0, -1.0, 1.0),
+            color: color1.clone(),
+            tex_coord: Vec2::new(1.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(-1.0, 1.0, 1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(1.0, 1.0),
+        },
+        VertexData {
+            position: Vec3::new(-1.0, 1.0, -1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(0.0, 1.0),
+        },
+        // Right face
+        VertexData {
+            position: Vec3::new(1.0, -1.0, 1.0),
+            color: color1.clone(),
+            tex_coord: Vec2::new(0.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, -1.0, -1.0),
+            color: color3.clone(),
+            tex_coord: Vec2::new(1.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, 1.0, -1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(1.0, 1.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, 1.0, 1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(0.0, 1.0),
+        },
+        // Top face
+        VertexData {
+            position: Vec3::new(-1.0, -1.0, -1.0),
+            color: color3.clone(),
+            tex_coord: Vec2::new(0.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, -1.0, -1.0),
+            color: color1.clone(),
+            tex_coord: Vec2::new(1.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, -1.0, 1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(1.0, 1.0),
+        },
+        VertexData {
+            position: Vec3::new(-1.0, -1.0, 1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(0.0, 1.0),
+        },
+        // Bottom face
+        VertexData {
+            position: Vec3::new(-1.0, 1.0, 1.0),
+            color: color3.clone(),
+            tex_coord: Vec2::new(0.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, 1.0, 1.0),
+            color: color1.clone(),
+            tex_coord: Vec2::new(1.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, 1.0, -1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(1.0, 1.0),
+        },
+        VertexData {
+            position: Vec3::new(-1.0, 1.0, -1.0),
+            color: color2.clone(),
+            tex_coord: Vec2::new(0.0, 1.0),
+        },
+    ]);
+
+    let indicies = vec![
+        0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16, 17,
+        18, 16, 18, 19, 20, 21, 22, 20, 22, 23,
+    ];
+
+    (vertices, indicies)
+}
+
+fn create_square_geometry() -> (Vec<VertexData>, Vec<u32>) {
     let color1 = Vec3 {
         x: 1.0,
         y: 0.0,
@@ -239,44 +400,36 @@ fn create_data() -> (Vec<VertexData>, Vec<u32>, Vec<InstanceData>) {
 
     let vertices = Vec::from([
         VertexData {
-            position: Vec3 {
-                x: -1.0,
-                y: -1.0,
-                z: -0.5,
-            },
+            position: Vec3::new(-1.0, -1.0, -0.5),
             color: color1.clone(),
-            tex_coord: Vec2 { x: 0.0, y: 0.0 },
+            tex_coord: Vec2::new(0.0, 0.0),
         },
         VertexData {
-            position: Vec3 {
-                x: -1.0,
-                y: 1.0,
-                z: -0.5,
-            },
-            color: color2.clone(),
-            tex_coord: Vec2 { x: 0.0, y: 1.0 },
-        },
-        VertexData {
-            position: Vec3 {
-                x: 1.0,
-                y: 1.0,
-                z: -0.5,
-            },
-            color: color2.clone(),
-            tex_coord: Vec2 { x: 1.0, y: 1.0 },
-        },
-        VertexData {
-            position: Vec3 {
-                x: 1.0,
-                y: -1.0,
-                z: -0.5,
-            },
+            position: Vec3::new(1.0, -1.0, -0.5),
             color: color3.clone(),
-            tex_coord: Vec2 { x: 1.0, y: 0.0 },
+            tex_coord: Vec2::new(1.0, 0.0),
+        },
+        VertexData {
+            position: Vec3::new(1.0, 1.0, -0.5),
+            color: color2.clone(),
+            tex_coord: Vec2::new(1.0, 1.0),
+        },
+        VertexData {
+            position: Vec3::new(-1.0, 1.0, -0.5),
+            color: color2.clone(),
+            tex_coord: Vec2::new(0.0, 1.0),
         },
     ]);
 
     let indicies: Vec<u32> = Vec::from([0, 1, 2, 0, 2, 3]);
+
+    (vertices, indicies)
+}
+
+fn create_data() -> (Vec<VertexData>, Vec<u32>, Vec<InstanceData>) {
+    // let (vertices, indicies) = create_square_geometry();
+    let (vertices, indicies) = create_cube_vertices();
+
     let instance_buffer_vec: Vec<InstanceData> = Vec::from([
         InstanceData {
             global_position: Vec3 {
@@ -294,23 +447,31 @@ fn create_data() -> (Vec<VertexData>, Vec<u32>, Vec<InstanceData>) {
                 z: -3.0,
             },
             local_scale: 1.4,
-            tex_index: 1
+            tex_index: 1,
         },
     ]);
 
-    return (vertices, indicies, instance_buffer_vec)
-
+    return (vertices, indicies, instance_buffer_vec);
 }
 
-
 fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance: VulkanInstance) {
+    let mut keyboard_handler = KeyboardInputHandler::new();
+
     let mut window_resized = false;
     let mut recreate_swapchain = false;
 
     let (vertices, indicies, instance_buffer_vec) = create_data();
-    
+
     // let mut camera_position = glm::vec3(0.0, 0.0, 0.0);
-    let mut camera = Camera::new(glm::vec3(0.0,0.0,0.0), glm::vec3(0.0,0.0,-1.0), glm::vec3(0.0,1.0,0.0), std::f32::consts::FRAC_PI_4, window.inner_size().width as f32 / window.inner_size().height as f32, 0.01, 1000.0);
+    let mut camera = Camera::new(
+        glm::vec3(0.0, 0.0, 0.0),
+        glm::vec3(0.0, 0.0, -1.0),
+        glm::vec3(0.0, 1.0, 0.0),
+        std::f32::consts::FRAC_PI_4,
+        window.inner_size().width as f32 / window.inner_size().height as f32,
+        0.01,
+        1000.0,
+    );
 
     // Creating texture array
     let image1 = load_image(String::from("./sample1.png"));
@@ -324,8 +485,6 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
     image_array_buffer.add_image_data(&image1.0);
     image_array_buffer.add_image_data(&image2.0);
 
-
-
     let mut single_upload_buffer = BufferUploader::new(
         instance.allocators.command_buffer_allocator.clone(),
         instance.allocators.memory_allocator.clone(),
@@ -334,11 +493,12 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
     // let image_view = single_upload_buffer.insert_image(image_buffer_object);
     let image_view = single_upload_buffer.insert_image_array(image_array_buffer);
-    
-
 
     // Single time uploader
-    let single_upload_future = single_upload_buffer.get_one_time_command_buffer().execute(instance.get_first_queue().clone()).unwrap();
+    let single_upload_future = single_upload_buffer
+        .get_one_time_command_buffer()
+        .execute(instance.get_first_queue().clone())
+        .unwrap();
     let _ = sync::now(instance.get_logical_device()).join(single_upload_future);
 
     // let image_view = ImageView::new_default(image_object).unwrap();
@@ -367,7 +527,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             let senX = 0.5;
             let senY = 0.3;
             camera.rotate(delta.0 as f32 * senX, delta.1 as f32 * senY);
-            println!("Mouse moved: {:?}", delta);
+            // println!("Mouse moved: {:?}", delta);
             // Rotate the mouse based on this (delta / sensitivity_factor)
         }
 
@@ -375,33 +535,11 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             event: WindowEvent::RedrawRequested,
             ..
         } => {
-
-            // let mut model = glm::identity::<f32, 4>();
-            // model = glm::translate(&model, &glm::vec3(0.1, 0.0, 0.0));
-            // model = glm::scale(&model, &glm::vec3(10.0,10.0,10.0));
-
-            // let mut view = glm::look_at(
-            //     // &camera_position,
-
-            //     &glm::vec3(
-            //         camera_position.x,
-            //         camera_position.y,
-            //         camera_position.z + -0.01,
-            //     ),
-            //     &glm::vec3(0.0, 1.0, 0.0),
-            // );
-
-
-            // let projection = glm::perspective(
-            //     (window.inner_size().width / window.inner_size().height) as f32,
-            //     std::f32::consts::PI / 4.0,
-            //     0.01,
-            //     -1000.0,
-            // );
             // draw call
 
+            update_camera_position(&mut camera, &keyboard_handler);
+
             if window_resized || recreate_swapchain {
-                
                 // recreating swapchains
                 instance.refresh_instance_swapchain(window.clone()); // refresh_instance_swapchain(window.clone(), &mut instance);
 
@@ -442,7 +580,6 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             // );
             // }
 
-
             // let mut model = glm::identi();
             // let mut view = camera.get_view_matrix_data();
             // let mut projection = camera.get_projection_matrix_data();
@@ -450,7 +587,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             // uniform 1
             // {
 
-            let model = glm::identity::<f32,4>();
+            let model = glm::identity::<f32, 4>();
             let view = camera.get_view_matrix_data();
             let projection = camera.get_projection_matrix_data();
 
@@ -460,7 +597,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                 projection: Into::<[[f32; 4]; 4]>::into(projection),
             };
 
-            println!("{:?}", view);
+            // println!("{:?}", view);
 
             // uniform_set.add_uniform_buffer(
             //     instance.allocators.memory_allocator.clone(),
@@ -475,7 +612,6 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                 Default::default(),
             );
             // }
-
 
             let mut vertex_staging_buffer = StagingBuffer::new();
             vertex_staging_buffer.add_vec(&vertices);
@@ -493,9 +629,12 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             );
 
             // Getting final device buffers
-            let device_vertex_buffer = buffer_uploader.insert_buffer(vertex_staging_buffer, BufferUsage::VERTEX_BUFFER);
-            let device_instance_buffer = buffer_uploader.insert_buffer(instance_staging_buffer, BufferUsage::VERTEX_BUFFER);
-            let device_index_buffer = buffer_uploader.insert_buffer(index_staging_buffer, BufferUsage::INDEX_BUFFER);
+            let device_vertex_buffer =
+                buffer_uploader.insert_buffer(vertex_staging_buffer, BufferUsage::VERTEX_BUFFER);
+            let device_instance_buffer =
+                buffer_uploader.insert_buffer(instance_staging_buffer, BufferUsage::VERTEX_BUFFER);
+            let device_index_buffer =
+                buffer_uploader.insert_buffer(index_staging_buffer, BufferUsage::INDEX_BUFFER);
 
             // Point in time where device buffers are populated
             let upload_future = buffer_uploader
@@ -504,14 +643,13 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                 .unwrap();
 
             let command_buffers = create_command_buffers(
-                &instance, 
-                device_vertex_buffer, 
-                device_index_buffer, 
-                device_instance_buffer, 
-
-                // image_data, 
-                vec![uni1, sampler_uniform.clone(), texture_uniform.clone()], 
-                data
+                &instance,
+                device_vertex_buffer,
+                device_index_buffer,
+                device_instance_buffer,
+                // image_data,
+                vec![uni1, sampler_uniform.clone(), texture_uniform.clone()],
+                data,
             );
 
             let (image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
@@ -533,7 +671,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             }
 
             // Future is a point where GPU gets access to the data
-            
+
             let future = sync::now(instance.get_logical_device())
                 .join(acquired_future)
                 .join(upload_future)
@@ -594,7 +732,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
         } => {
             if window_id == window.id() {
                 // winit_handle_window_events(event, elwt, &mut camera_position);
-                winit_handle_window_events(event, elwt, &mut camera);
+                winit_handle_window_events(event, &mut keyboard_handler, elwt);
             }
         }
         Event::LoopExiting => {
@@ -604,8 +742,6 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
         _ => (),
     });
 }
-
-
 
 static mut START: Option<SystemTime> = None;
 static mut MOVE_SPEED: f32 = 0.1;
@@ -629,7 +765,6 @@ fn create_command_buffers(
     uniforms: Vec<UniformBuffer>,
     push_constant_data: shaders::deferred::vs::PushConstantData, // uniform_buffer_data: graphics_pack::shaders::vs::Data,
 ) -> Vec<CommandBufferType> {
-
     // TODO:
     // 1. Get the buffer from the staging buffer object
     // 2. Get the sub buffer object from the staging buffer
@@ -676,7 +811,10 @@ fn create_command_buffers(
                 // .bind_vertex_buffers(0, (vertex_subbuffer, instance_subbuffer))
                 .bind_vertex_buffers(
                     0,
-                    (device_vertex_buffer.buffer.clone(), device_instance_buffer.buffer.clone()),
+                    (
+                        device_vertex_buffer.buffer.clone(),
+                        device_instance_buffer.buffer.clone(),
+                    ),
                 )
                 .unwrap();
 

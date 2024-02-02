@@ -10,7 +10,7 @@ use vulkano::{
             depth_stencil::{self, DepthStencilState},
             input_assembly::InputAssemblyState,
             rasterization::{FrontFace, RasterizationState},
-            vertex_input::{Vertex, VertexDefinition},
+            vertex_input::{Vertex, VertexBufferDescription, VertexDefinition},
             viewport::{Viewport, ViewportState},
             GraphicsPipelineCreateInfo,
         },
@@ -137,7 +137,8 @@ impl base_pipeline::GraphicsPipelineBuilder for DeferredPipeline {
                     // rasterization_state: Some(Default::default()),
                     rasterization_state: Some(RasterizationState {
                         cull_mode: graphics::rasterization::CullMode::Back,
-                        front_face: FrontFace::CounterClockwise,
+                        // front_face: FrontFace::CounterClockwise,
+                        front_face: FrontFace::Clockwise,
                         ..Default::default()
                     }),
                     multisample_state: Some(Default::default()),

@@ -98,6 +98,8 @@ impl Camera {
 
         self.camera_front = new_front.normalize();
         self.camera_right = self.camera_front.cross(&self.camera_up).normalize();
+        
+        // To enable comfortable free roam, we let the up vector always point to the world up
         // self.camera_up = self.camera_right.cross(&self.camera_front).normalize();
     }
 
@@ -111,7 +113,6 @@ impl Camera {
     pub fn get_view_matrix_data(&mut self) -> glm::TMat4<f32> {
 
         let look_at_vec = self.position + self.camera_front;
-        println!("{}", look_at_vec);
 
         glm::look_at(
             &self.position,

@@ -83,7 +83,8 @@ impl GraphicsPipelineBuilder for LightingPipeline {
                     // flags: todo!(),
                     rasterization_state: Some(RasterizationState {
                         cull_mode: vulkano::pipeline::graphics::rasterization::CullMode::Back,
-                        front_face: vulkano::pipeline::graphics::rasterization::FrontFace::CounterClockwise,
+                        // front_face: vulkano::pipeline::graphics::rasterization::FrontFace::CounterClockwise,
+                        front_face: vulkano::pipeline::graphics::rasterization::FrontFace::Clockwise,
                         ..Default::default()
                     }),
                     multisample_state: Some(MultisampleState::default()),

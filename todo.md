@@ -19,7 +19,6 @@ Guess - We should be able to do this since an image is just a location in memory
 
 # FUTURE GOALS
 [] Different types of lighting
-
 [] Indirect drawing
 [] Dynamic shader loading
 
