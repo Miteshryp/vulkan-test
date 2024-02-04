@@ -4,11 +4,18 @@
     - [x] Find a solution to image view binding requirement for attachment image buffers
 
     - [] Modularize the code by creating "Renderers"
-        - [] Create a class "VulkanRenderpass" to save details of render pass and its attachments (will store attachments in this, and this object will be a part of the renderer)
+        - [] Store the push descriptor data in the renderer and create functions to pass the appropriate push descriptor data
+        - [] Write functions to pass the correct attachment in the descriptor set write assigned for intermidiate attachments.        
 
     - [x] Find out why the formatting change is not working in render subpass attachments - Stupid mistake (I passed UINT instead of a UNORM)
 
 [x] Fix the unknown issue with texture loading (new_sample2 is not loading properly, and further more its messing up )
+
+# SHORT NOTES (Will remove later)
+- Samplers uniforms (or rather any other uniforms which do not change for a given pipeline) should reside inside Renderer, since the Renderer can automatically bind the uniforms while creating command buffers
+
+
+
 
 ### LOW PRIORITY
 [x] Solve the global store problem in rust. - Will be solved using plugins (like in nest.js)

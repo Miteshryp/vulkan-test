@@ -32,8 +32,8 @@ use vulkano::{
     Version, VulkanError, VulkanLibrary,
 };
 
-use crate::graphics_pack::pipelines::{
-    base_pipeline::GraphicsPipelineBuilder,
+use crate::graphics::pipelines::{
+    base_pipeline::GraphicsPipelineInterface,
     basic_pipeline,
     deferred_pipeline::{self, DeferredPipeline},
     lighting_pipeline::{self, LightingPipeline},

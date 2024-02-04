@@ -5,7 +5,7 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use crate::graphics_pack::buffers::base_buffer::{self, BufferOptions};
+use crate::graphics::buffers::base_buffer::{self, BufferOptions};
 
 use super::base_buffer::StagingBuffer;
 

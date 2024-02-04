@@ -125,27 +125,6 @@ where
         self.buffer = self.buffer.iter().chain(data.iter()).cloned().collect();
     }
 
-    // pub fn create_buffer(
-    //     self,
-    //     allocator: GenericBufferAllocator,
-    //     usage: BufferUsage,
-    // ) -> Subbuffer<[T]> {
-    //     Buffer::from_iter(
-    //         allocator,
-    //         BufferCreateInfo {
-    //             usage: BufferUsage::TRANSFER_SRC | usage,
-    //             ..Default::default()
-    //         },
-    //         AllocationCreateInfo {
-    //             memory_type_filter: MemoryTypeFilter::PREFER_HOST
-    //                 | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-    //             ..Default::default()
-    //         },
-    //         self.buffer.into_iter(),
-    //     )
-    //     .unwrap()
-    // }
-
     pub fn create_host_buffer(self, allocator: GenericBufferAllocator, usage: BufferUsage) -> Subbuffer<[T]> {
         Buffer::from_iter(
             allocator,
@@ -207,39 +186,18 @@ where
         return (host_buffer, device_buffer);
         
     }
-
-
-    // Static functions
-    // pub fn get_device_buffer(
-    //     allocator: GenericBufferAllocator,
-    //     staging_buffer: StagingBuffer<T>,
-    //     usage: BufferUsage
-    // ) -> Subbuffer<[T]> {
-    //     let buffer_size = staging_buffer.byte_size();
-        
-    //     Buffer::new_slice(
-    //         allocator,
-    //         BufferCreateInfo {
-    //             usage: BufferUsage::TRANSFER_DST | usage,
-    //             ..Default::default()
-    //         },
-    //         AllocationCreateInfo {
-    //             memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-    //             ..Default::default()
-    //         },
-    //         buffer_size as u64
-    //     ).unwrap()
-    // }
+    
 }
 
 
-pub struct StagingBufferMap {
-    pub host_buffer: Subbuffer<[u8]>,
-    pub device_buffer: Subbuffer<[u8]>
-}
+// pub struct StagingBufferMap {
+//     pub host_buffer: Subbuffer<[u8]>,
+//     pub device_buffer: Subbuffer<[u8]>
+// }
 
 
 
+#[derive(Clone)]
 pub struct DeviceBuffer<T> {
     pub buffer: Subbuffer<[T]>,
     pub count: u32

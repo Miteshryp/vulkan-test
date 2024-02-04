@@ -1,4 +1,4 @@
-mod graphics_pack;
+mod graphics;
 // mod vertex;
 
 use image::{
@@ -7,7 +7,7 @@ use image::{
 };
 use nalgebra_glm as glm;
 
-use graphics_pack::{
+use graphics::{
     buffers::{
         self,
         base_buffer::{DeviceBuffer, StagingBuffer},
@@ -21,7 +21,7 @@ use graphics_pack::{
         uploader::BufferUploader,
         vulkan::{VulkanInstance, VulkanSwapchainInfo},
     },
-    pipelines::base_pipeline::GraphicsPipelineBuilder,
+    pipelines::base_pipeline::GraphicsPipelineInterface,
     shaders::{self, deferred, lighting},
 };
 use smallvec::SmallVec;
@@ -536,7 +536,11 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
             /*
                 let renderer = DeferredRenderer::new(..);
-                renderer.submit_vertex_buffer(ver)            
+                
+                renderer.submit_vertex_buffers((vertex_buffer, instance_buffer))            
+                renderer.submit_index_buffer(vertex_buffer)
+
+                let future = renderer.render_future().join(); // renders the buffers
              */
 
             // let mut uniform_set = UniformSet::new(0);
@@ -583,7 +587,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             let mut instance_staging_buffer = StagingBuffer::from_vec_ref(&instance_buffer_vec);
             let mut index_staging_buffer = StagingBuffer::from_vec_ref(&indicies);
 
-            
+
             // Uploading buffer
             let mut buffer_uploader = BufferUploader::new(
                 instance.allocators.command_buffer_allocator.clone(),
@@ -683,21 +687,16 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             exit(0);
         }
 
-        // Event::DeviceEvent {
-        //     device_id,
-        //     event: DeviceEvent::Key(key_event),
-        // } => {
-        //     winit_handle_window_events(key_event, elwt, &mut camera_position);
-        // }
         Event::WindowEvent {
             window_id,
             event, // event: WindowEvent::KeyboardInput { event, .. },
         } => {
             if window_id == window.id() {
-                // winit_handle_window_events(event, elwt, &mut camera_position);
                 winit_handle_window_events(event, &mut keyboard_handler, elwt);
             }
         }
+
+
         Event::LoopExiting => {
             println!("Exiting the event loop");
             exit(0);
@@ -708,7 +707,6 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
 static mut START: Option<SystemTime> = None;
 static mut MOVE_SPEED: f32 = 0.1;
-static mut PUSH_DESCRIPTOR_INDEX: usize = 1;
 
 /*
  Different from get_command_buffers
@@ -719,7 +717,6 @@ static mut PUSH_DESCRIPTOR_INDEX: usize = 1;
 */
 fn create_command_buffers(
     instance: &VulkanInstance,
-    // command_builder: &mut primitives::PrimaryAutoCommandBuilderType,
 
     // staging data objects
     device_vertex_buffer: DeviceBuffer<VertexData>,
@@ -727,7 +724,7 @@ fn create_command_buffers(
     device_instance_buffer: DeviceBuffer<InstanceData>,
 
     uniforms: Vec<UniformBuffer>,
-    attachments: Vec<UniformBuffer>, // push_constant_data: Option<impl BufferContents + Clone>, // uniform_buffer_data: graphics_pack::shaders::vs::Data,
+    attachments: Vec<UniformBuffer>,
 ) -> Vec<CommandBufferType> {
     // TODO:
     // 1. Get the buffer from the staging buffer object
@@ -735,7 +732,6 @@ fn create_command_buffers(
     // 3. Transfer the data into a final buffer using a new upload command buffer
     // 4. Pass the final buffer into the fbo builder function
 
-    // let graphics_pipeline = instance.get_graphics_pipeline();
     let graphics_pipeline = instance.render_target.pipeline.clone();
     let lighting_pipeline = instance.render_target.lighting_pipeline.clone();
 

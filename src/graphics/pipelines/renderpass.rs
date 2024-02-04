@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use vulkano::{device::Device, render_pass::RenderPass};
 
-use crate::graphics_pack::components::vulkan::VulkanSwapchainInfo;
+use crate::graphics::components::vulkan::VulkanSwapchainInfo;
 
 pub fn create_render_pass(
     device: Arc<Device>,

@@ -22,22 +22,54 @@ use vulkano::{
 };
 use winit::window::Window;
 
-use crate::graphics_pack::{
+use crate::graphics::{
     buffers::primitives::*, components::vulkan::VulkanSwapchainInfo, pipelines::base_pipeline,
     shaders,
 };
 
 use super::{
-    base_pipeline::{GraphicsPipelineBuilder, InitializePipeline},
+    base_pipeline::{GraphicsPipelineInterface},
     renderpass::create_render_pass,
 };
 
-pub struct BasicPipeline {
+#[derive(Clone)]
+pub struct DeferredPipeline {
     pub pipeline: Arc<GraphicsPipeline>,
     push_descriptor_set_index: u32,
 }
 
-impl InitializePipeline for BasicPipeline {
+
+// A subpass will be specific for a pipeline.
+// A pipeline expects a subpass definition to be fullfilled.
+// NOTE: It might be good to define the subpass definition of a pipeline as a comment.
+//      This might help in creation of a correct render_pass object.
+
+
+impl DeferredPipeline {
+
+    pub fn new(
+        window: Arc<Window>,
+        logical_device: Arc<Device>,
+        render_pass: Arc<RenderPass>,
+        // swapchain_info: &VulkanSwapchainInfo,
+        subpass_index: u32,
+    ) -> DeferredPipeline {
+        let push_descriptor_set_index = 0;
+
+        DeferredPipeline {
+            pipeline: Self::create_pipeline(
+                logical_device,
+                window,
+                render_pass,
+                subpass_index,
+                push_descriptor_set_index,
+                None
+            ),
+            push_descriptor_set_index,
+        }
+    }
+
+
     fn create_pipeline(
         logical_device: Arc<Device>,
         window: Arc<Window>,
@@ -46,16 +78,15 @@ impl InitializePipeline for BasicPipeline {
         push_descriptor_set_index: u32,
         attachment_descriptor_set_index: Option<u32>
     ) -> Arc<GraphicsPipeline> {
-        // let render_pass = create_render_pass(logical_device.clone(), swapchain_info);
         let subpass = Subpass::from(render_pass.clone(), subpass_index).unwrap();
 
-        let vertex_shader: EntryPoint = shaders::basic::load_vertex_shader(logical_device.clone())
-            .entry_point("main")
-            .unwrap();
+        let vertex_shader: EntryPoint =
+            shaders::deferred::load_vertex_shader(logical_device.clone())
+                .entry_point("main")
+                .unwrap();
 
-        // println!("Vertex Shader entry point info: {:?}", vertex_shader.info());
 
-        let fragment_shader = shaders::basic::load_fragment_shader(logical_device.clone())
+        let fragment_shader = shaders::deferred::load_fragment_shader(logical_device.clone())
             .entry_point("main")
             .unwrap();
 
@@ -63,8 +94,6 @@ impl InitializePipeline for BasicPipeline {
             .definition(&vertex_shader.info().input_interface)
             .unwrap();
 
-        // This creation moves the vertex and fragment shaders,
-        // so we cannot use those objects after this point
         let pipeline_stages = [
             PipelineShaderStageCreateInfo::new(vertex_shader),
             PipelineShaderStageCreateInfo::new(fragment_shader),
@@ -73,10 +102,10 @@ impl InitializePipeline for BasicPipeline {
         let mut descriptor_set_layout =
             PipelineDescriptorSetLayoutCreateInfo::from_stages(&pipeline_stages);
 
-        // Enabling descriptor pushes on set 0
+        // Push Descriptor set configuration
         let set_layout = &mut descriptor_set_layout.set_layouts[push_descriptor_set_index as usize];
         set_layout.flags |= DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR;
-        set_layout.bindings.get_mut(&0).unwrap().immutable_samplers = vec![Sampler::new(
+        set_layout.bindings.get_mut(&1).unwrap().immutable_samplers = vec![Sampler::new(
             logical_device.clone(),
             SamplerCreateInfo {
                 address_mode: [SamplerAddressMode::Repeat; 3],
@@ -155,30 +184,8 @@ impl InitializePipeline for BasicPipeline {
     }
 }
 
-impl base_pipeline::GraphicsPipelineBuilder for BasicPipeline {
-    type NewPipeline = Self;
 
-    fn new(
-        window: Arc<Window>,
-        logical_device: Arc<Device>,
-        render_pass: Arc<RenderPass>,
-        // swapchain_info: &VulkanSwapchainInfo,
-        subpass_index: u32,
-    ) -> BasicPipeline {
-        let push_descriptor_index = 1;
-
-        BasicPipeline {
-            pipeline: Self::create_pipeline(
-                logical_device,
-                window,
-                render_pass,
-                subpass_index,
-                push_descriptor_index,
-                None
-            ),
-            push_descriptor_set_index: push_descriptor_index,
-        }
-    }
+impl base_pipeline::GraphicsPipelineInterface for DeferredPipeline {
 
     fn get_push_descriptor_set_index(&self) -> u32 {
         self.push_descriptor_set_index
@@ -186,5 +193,9 @@ impl base_pipeline::GraphicsPipelineBuilder for BasicPipeline {
 
     fn get_attachment_descriptor_set_index(&self) -> Option<u32> {
         None
+    }
+
+    fn get_pipeline(&self) -> Arc<GraphicsPipeline> {
+        self.pipeline.clone()
     }
 }

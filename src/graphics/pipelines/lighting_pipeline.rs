@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use vulkano::{descriptor_set::layout::DescriptorSetLayoutCreateFlags, pipeline::{graphics::{color_blend::{ColorBlendAttachmentState, ColorBlendState}, input_assembly::InputAssemblyState, multisample::MultisampleState, rasterization::RasterizationState, vertex_input::{Vertex, VertexDefinition}, viewport::{Viewport, ViewportState}, GraphicsPipelineCreateInfo}, layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo}, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo}, render_pass::{RenderPass, Subpass}, sync::PipelineStages};
 
-use crate::graphics_pack::{buffers::{primitives::InstanceData, VertexData}, shaders};
+use crate::graphics::{buffers::{primitives::InstanceData, VertexData}, shaders};
 
-use super::{base_pipeline::{GraphicsPipelineBuilder, InitializePipeline}, renderpass};
+use super::{base_pipeline::{GraphicsPipelineInterface}, renderpass};
 
 #[derive(Clone)]
 pub struct LightingPipeline {
@@ -13,7 +13,28 @@ pub struct LightingPipeline {
     attachment_descriptor_set_index: u32
 }
 
-impl InitializePipeline for LightingPipeline {
+impl LightingPipeline {
+
+    pub fn new(
+        window: Arc<winit::window::Window>,
+        logical: Arc<vulkano::device::Device>,
+        render_pass: Arc<RenderPass>,
+        subpass_index: u32,
+    ) -> Self {
+    
+        let push_descriptor_set_index = 0;
+        let attachment_descriptor_set_index = 1;
+        
+        Self {
+            pipeline: Self::create_pipeline(
+                logical,
+                window,
+                render_pass, subpass_index, push_descriptor_set_index, Some(attachment_descriptor_set_index)),
+            push_descriptor_set_index,
+            attachment_descriptor_set_index
+        }
+    }
+
     fn create_pipeline(
         logical: Arc<vulkano::device::Device>,
         window: Arc<winit::window::Window>,
@@ -114,31 +135,12 @@ impl InitializePipeline for LightingPipeline {
         ).unwrap()
 
     }
+
+
 }
 
 
-impl GraphicsPipelineBuilder for LightingPipeline {
-    type NewPipeline = LightingPipeline;
-
-    fn new(
-            window: Arc<winit::window::Window>,
-            logical: Arc<vulkano::device::Device>,
-            render_pass: Arc<RenderPass>,
-            subpass_index: u32,
-        ) -> Self::NewPipeline {
-        
-        let push_descriptor_set_index = 0;
-        let attachment_descriptor_set_index = 1;
-        
-        Self::NewPipeline {
-            pipeline: Self::create_pipeline(
-                logical,
-                window,
-                render_pass, subpass_index, push_descriptor_set_index, Some(attachment_descriptor_set_index)),
-            push_descriptor_set_index,
-            attachment_descriptor_set_index
-        }
-    }
+impl GraphicsPipelineInterface for LightingPipeline {
 
     fn get_push_descriptor_set_index(&self) -> u32 {
         self.push_descriptor_set_index
@@ -146,6 +148,10 @@ impl GraphicsPipelineBuilder for LightingPipeline {
 
     fn get_attachment_descriptor_set_index(&self) -> Option<u32> {
         Some(self.attachment_descriptor_set_index)
+    }
+
+    fn get_pipeline(&self) -> Arc<GraphicsPipeline> {
+        self.pipeline.clone()
     }
 
 }

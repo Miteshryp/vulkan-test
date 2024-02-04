@@ -10,7 +10,7 @@ use vulkano::{
     pipeline::{GraphicsPipeline, Pipeline}, image::{sampler::Sampler, view::ImageView},
 };
 
-use crate::graphics_pack::buffers::base_buffer::*;
+use crate::graphics::buffers::base_buffer::*;
 
 use super::primitives::GenericBufferAllocator;
 

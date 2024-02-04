@@ -7,7 +7,7 @@ use vulkano::{
     }, format::Format, image::{view::ImageView, Image, ImageCreateInfo, ImageUsage}, memory::allocator::{AllocationCreateInfo, MemoryTypeFilter}
 };
 
-use crate::graphics_pack::buffers::{
+use crate::graphics::buffers::{
     base_buffer::{DeviceBuffer, StagingBuffer},
     image_buffer::{StagingImage, StagingImageArrayBuffer, StagingImageBuffer},
     primitives::CommandBufferType,
