@@ -30,10 +30,12 @@ pub mod vs {
             
             // Vertex inputs
             // layout(location = 0) in vec3 position; // What is this position? - Shader only runs on the fragments covered by the vertices, so we will have to pass this vertex into the rasterizer to obtain the correct fragments to process.
+            layout(location = 0) out vec3 out_position;
             
             void main() {
                 vec4 player_position = mvp.model * vec4(position * local_scale + global_position, 1.0);
                 gl_Position = mvp.projection * mvp.view * player_position;
+                out_position = global_position;
             }
             ",
     );
@@ -46,7 +48,7 @@ pub mod fs {
             #version 460
 
             layout(input_attachment_index = 0, set = 1, binding = 0) uniform subpassInput attachment_color;
-            layout(input_attachment_index = 1, set = 1, binding = 1) uniform subpassInput attachment_normals;
+            layout(input_attachment_index = 1, set = 1, binding = 1) uniform subpassInput attachment_normal;
 
             layout(set = 0, binding = 0) uniform MvpMatrix {
                 mat4 model;
@@ -54,11 +56,22 @@ pub mod fs {
                 mat4 projection;
             } mvp;
 
+            layout(location = 0) in vec3 in_position;
             layout(location = 0) out vec4 f_color;
             
             void main() {
-                vec4 new_color = vec4(subpassLoad(attachment_color).rgb, 1.0);
-                f_color = vec4(0.0,1.0,0.5,1.0);
+                vec3 fragment_normal = subpassLoad(attachment_normal).rgb;
+                vec3 fragment_color = subpassLoad(attachment_color).rgb;
+
+                vec3 light_pos = vec3(0.0,-10.0,10.0);
+                vec3 light_color = vec3(1,1,1);
+                
+                float dot_prod = dot(normalize( (light_pos - in_position) - fragment_normal), normalize(fragment_normal));
+                vec4 new_color = vec4(fragment_color * light_color, 1) * max(dot_prod, 0.1);
+
+                // f_color = vec4(0.0,1.0,0.5,1.0);
+                f_color = new_color;
+                // f_color = vec4(fragment_normal, 1);
             }
         ",
     );

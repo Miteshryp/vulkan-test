@@ -12,7 +12,7 @@ use graphics_pack::{
         self,
         base_buffer::{DeviceBuffer, StagingBuffer},
         image_buffer::{StagingImageArrayBuffer, StagingImageBuffer},
-        primitives::{CommandBufferType, InstanceData, Vec2, Vec3, VertexData},
+        primitives::{self, CommandBufferType, InstanceData, Vec2, Vec3, VertexData},
         uniform_buffer::{UniformBuffer, UniformSet},
     },
     components::{
@@ -208,6 +208,8 @@ fn create_cube_vertices() -> (Vec<VertexData>, Vec<u32>) {
             color: color2.clone(),
             tex_coord: Vec2::new(0.0, 1.0),
         },
+
+
         // Back face
         VertexData {
             position: Vec3::new(1.0, -1.0, -1.0),
@@ -477,7 +479,14 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
     // Writing texture data into the uniform
     // let texture_uniform = UniformBuffer::create_image_view(1, image_view.clone()); // Single texture write
     let texture_uniform = UniformBuffer::create_image_view(2, image_view.clone()); // Single texture write
-                                                                                   // let texture_uniform = UniformBuffer::create_image_view_array(1, image_view.clone());
+    
+    // let mut command_builder = AutoCommandBufferBuilder::primary(
+    //     &instance.allocators.command_buffer_allocator,
+    //     instance.get_first_queue().queue_family_index(),
+    //     // CommandBufferUsage::OneTimeSubmit,
+    //     CommandBufferUsage::MultipleSubmit
+    // )
+    // .unwrap();                                                                 // let texture_uniform = UniformBuffer::create_image_view_array(1, image_view.clone());
 
     el.set_control_flow(ControlFlow::Poll);
     let _ = el.run(|app_event, elwt| match app_event {
@@ -525,6 +534,11 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                 recreate_swapchain = false;
             }
 
+            /*
+                let renderer = DeferredRenderer::new(..);
+                renderer.submit_vertex_buffer(ver)            
+             */
+
             // let mut uniform_set = UniformSet::new(0);
 
             
@@ -565,14 +579,11 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
 
 
-            let mut vertex_staging_buffer = StagingBuffer::new();
-            vertex_staging_buffer.add_vec(&vertices);
-            let mut instance_staging_buffer = StagingBuffer::new();
-            instance_staging_buffer.add_vec(&instance_buffer_vec);
+            let mut vertex_staging_buffer = StagingBuffer::from_vec_ref(&vertices);
+            let mut instance_staging_buffer = StagingBuffer::from_vec_ref(&instance_buffer_vec);
+            let mut index_staging_buffer = StagingBuffer::from_vec_ref(&indicies);
 
-            let mut index_staging_buffer = StagingBuffer::new();
-            index_staging_buffer.add_vec(&indicies);
-
+            
             // Uploading buffer
             let mut buffer_uploader = BufferUploader::new(
                 instance.allocators.command_buffer_allocator.clone(),
@@ -599,10 +610,9 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                 device_vertex_buffer,
                 device_index_buffer,
                 device_instance_buffer,
-                // image_data,
+                
                 vec![mvp_uniform, sampler_uniform.clone(), texture_uniform.clone()],
-                // vec![attachment_color, attachment_normal], // None,
-                vec![attachment_color]
+                vec![attachment_color, attachment_normal]
             );
 
             let (image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
@@ -709,6 +719,7 @@ static mut PUSH_DESCRIPTOR_INDEX: usize = 1;
 */
 fn create_command_buffers(
     instance: &VulkanInstance,
+    // command_builder: &mut primitives::PrimaryAutoCommandBuilderType,
 
     // staging data objects
     device_vertex_buffer: DeviceBuffer<VertexData>,
@@ -736,7 +747,8 @@ fn create_command_buffers(
             let mut command_builder = AutoCommandBufferBuilder::primary(
                 &instance.allocators.command_buffer_allocator,
                 instance.get_first_queue().queue_family_index(),
-                CommandBufferUsage::OneTimeSubmit,
+                // CommandBufferUsage::OneTimeSubmit,
+                CommandBufferUsage::MultipleSubmit
             )
             .unwrap();
 
