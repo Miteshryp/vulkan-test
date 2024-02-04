@@ -252,8 +252,8 @@ impl VulkanInstance {
                 usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
                 // stencil_usage: Some(ImageUsage::INPUT_ATTACHMENT),
                 extent: [window.inner_size().width, window.inner_size().height, 1],
-                // format: Format::R16G16B16A16_SFLOAT,
-                format: Format::R32G32B32A32_SFLOAT,
+                format: Format::R16G16B16A16_SFLOAT,
+                // format: Format::R32G32B32A32_SFLOAT,
                 ..Default::default()
             },
             AllocationCreateInfo {
@@ -269,8 +269,8 @@ impl VulkanInstance {
                 usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
                 // stencil_usage: Some(ImageUsage::INPUT_ATTACHMENT),
                 extent: [window.inner_size().width, window.inner_size().height, 1],
-                // format: Format::A2B10G10R10_UINT_PACK32,
-                format: Format::R32G32B32A32_SFLOAT,
+                format: Format::A2B10G10R10_UNORM_PACK32,
+                // format: Format::R32G32B32A32_SFLOAT,
                 ..Default::default()
             },
             AllocationCreateInfo {
@@ -434,16 +434,16 @@ impl VulkanInstance {
                     store_op: Store,
                 },
                 color: {
-                    // format: vulkano::format::Format::A2B10G10R10_UINT_PACK32,
-                    format: vulkano::format::Format::R32G32B32A32_SFLOAT,
+                    format: vulkano::format::Format::A2B10G10R10_UNORM_PACK32,
+                    // format: vulkano::format::Format::R32G32B32A32_SFLOAT,
                     samples: 1,
                     load_op: Clear,
                     store_op: Store,
                 },
 
                 normals: {
-                    // format: vulkano::format::Format::R16G16B16A16_SFLOAT
-                    format: vulkano::format::Format::R32G32B32A32_SFLOAT,
+                    format: vulkano::format::Format::R16G16B16A16_SFLOAT,
+                    // format: vulkano::format::Format::R32G32B32A32_SFLOAT,
                     samples: 1,
                     load_op: Clear,
                     store_op: DontCare,
