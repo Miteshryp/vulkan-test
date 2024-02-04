@@ -1,11 +1,10 @@
 
 # TODAY's GOALS
-[] Multipass / Deffered rendering
+[x] Multipass / Deffered rendering
+    - [x] Find a solution to image view binding requirement for attachment image buffers
+    - [] Modularize the code by creating "Renderers"
 
-### QUESTIONS
-1. Can we modify the contents of an image after binding it to an image view object?
-Guess - We should be able to do this since an image is just a location in memory, which is bound to a image view object. So image view should just contain the pointer to the image data. Us modifying the image data should not have any difference in the image view operation.
-
+[x] Fix the unknown issue with texture loading (new_sample2 is not loading properly, and further more its messing up )
 
 ### LOW PRIORITY
 [x] Solve the global store problem in rust. - Will be solved using plugins (like in nest.js)

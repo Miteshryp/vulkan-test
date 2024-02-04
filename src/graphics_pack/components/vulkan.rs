@@ -1,51 +1,43 @@
 use std::sync::Arc;
 
-use winit::{
-    event_loop::EventLoop, window::{Window}
-};
+use winit::{event_loop::EventLoop, window::Window};
 
 use vulkano::{
     command_buffer::{
-        allocator::{
-            StandardCommandBufferAllocator,
-            StandardCommandBufferAllocatorCreateInfo,
-        },
+        allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
         AutoCommandBufferBuilder, CommandBufferLevel, CommandBufferUsage, CopyBufferInfo,
-        PrimaryAutoCommandBuffer,
-        PrimaryCommandBufferAbstract,
+        PrimaryAutoCommandBuffer, PrimaryCommandBufferAbstract,
     },
-    descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, 
-    },
+    descriptor_set::allocator::StandardDescriptorSetAllocator,
     device::{
         physical::{self, PhysicalDeviceType},
-        Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo,
-        QueueFlags,
+        Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
     },
-
-    pipeline::GraphicsPipeline,
+    format::Format,
     image::{
         sampler::{Sampler, SamplerAddressMode, SamplerCreateInfo},
         view::ImageView,
-        Image, ImageCreateInfo, ImageUsage,
+        Image, ImageCreateInfo, ImageType, ImageUsage,
     },
-
     instance::InstanceCreateInfo,
-
     memory::{
         allocator::{
             AllocationCreateInfo, GenericMemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
         },
         MemoryType,
     },
-
+    pipeline::GraphicsPipeline,
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
     swapchain::{self, Surface, SurfaceInfo, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo},
-    Version, VulkanLibrary, VulkanError
+    Version, VulkanError, VulkanLibrary,
 };
 
-
-use crate::graphics_pack::pipelines::{base_pipeline::GraphicsPipelineBuilder, deferred_pipeline, lighting_pipeline};
+use crate::graphics_pack::pipelines::{
+    base_pipeline::GraphicsPipelineBuilder,
+    basic_pipeline,
+    deferred_pipeline::{self, DeferredPipeline},
+    lighting_pipeline::{self, LightingPipeline},
+};
 
 // type name for buffer allocator
 type GenericBufferAllocator =
@@ -57,15 +49,19 @@ type PrimaryAutoCommandBuilderType = AutoCommandBufferBuilder<
     Arc<StandardCommandBufferAllocator>,
 >;
 
-
-
-
-
+pub struct RenderPassAttachments {
+    pub color_image_view: Arc<ImageView>,
+    pub normal_image_view: Arc<ImageView>,
+}
 
 pub struct RenderTargetInfo {
-    pub pipeline: Arc<GraphicsPipeline>,
+    // pub pipeline: Arc<GraphicsPipeline>,
+    // pub lighting_pipeline: Arc<GraphicsPipeline>,
+    pub pipeline: DeferredPipeline,
+    pub lighting_pipeline: LightingPipeline,
     // pub render_pass: Arc<RenderPass>,
     pub fbos: Vec<Arc<Framebuffer>>,
+    pub attachments: RenderPassAttachments,
     pub image_sampler: Arc<Sampler>,
 }
 
@@ -81,7 +77,6 @@ pub struct VulkanInstance {
     surface: Arc<Surface>,
     queue: Arc<Queue>,
     // device_queues: Vec<Arc<Queue>>,
-
     pub swapchain_info: VulkanSwapchainInfo,
     pub render_target: RenderTargetInfo,
     pub allocators: InstanceAllocators,
@@ -224,21 +219,22 @@ impl VulkanInstance {
         }
     }
 
-
     pub fn create_render_target(
         window: Arc<Window>,
         device: Arc<Device>,
         swapchain_info: &VulkanSwapchainInfo,
         allocator: GenericBufferAllocator,
     ) -> RenderTargetInfo {
-        let render_pass = VulkanInstance::create_render_pass(device.clone(), swapchain_info); // defines the schema information required for configuring the output of shaders to the framebuffer
-    
-        let depth_image = Image::new(
+        // let render_pass = VulkanInstance::create_basic_render_pass(device.clone(), swapchain_info); // defines the schema information required for configuring the output of shaders to the framebuffer
+        let render_pass = VulkanInstance::create_deferred_render_pass(device.clone(), swapchain_info);
+
+        // Creating Attachment Buffers
+        let depth_image_view = ImageView::new_default(Image::new(
             allocator.clone(),
             ImageCreateInfo {
                 // image_type: vulkano::image::ImageType::Dim1d,
                 usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
-                stencil_usage: Some(ImageUsage::DEPTH_STENCIL_ATTACHMENT),
+                // stencil_usage: Some(ImageUsage::DEPTH_STENCIL_ATTACHMENT),
                 format: vulkano::format::Format::D16_UNORM,
                 extent: [window.inner_size().width, window.inner_size().height, 1],
                 ..Default::default()
@@ -247,16 +243,66 @@ impl VulkanInstance {
                 memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
                 ..Default::default()
             },
-        )
+        ).unwrap())
         .unwrap();
-    
+
+        let normal_image_view = ImageView::new_default(Image::new(
+            allocator.clone(),
+            ImageCreateInfo {
+                usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
+                // stencil_usage: Some(ImageUsage::INPUT_ATTACHMENT),
+                extent: [window.inner_size().width, window.inner_size().height, 1],
+                // format: Format::R16G16B16A16_SFLOAT,
+                format: Format::R32G32B32A32_SFLOAT,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+        )
+        .unwrap()).unwrap();
+
+        let color_image_view = ImageView::new_default(Image::new(
+            allocator.clone(),
+            ImageCreateInfo {
+                usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
+                // stencil_usage: Some(ImageUsage::INPUT_ATTACHMENT),
+                extent: [window.inner_size().width, window.inner_size().height, 1],
+                // format: Format::A2B10G10R10_UINT_PACK32,
+                format: Format::R32G32B32A32_SFLOAT,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+        )
+        .unwrap()).unwrap();
+
         // Create a framebuffer for each swapchain image
         let fbos: Vec<Arc<Framebuffer>> = swapchain_info
             .images
             .iter()
-            .map(|img| create_framebuffer_object(render_pass.clone(), img.clone(), depth_image.clone()))
+            .map(|img| {
+                // create_basic_framebuffer_object(
+                //     render_pass.clone(),
+                //     img.clone(),
+                //     depth_image.clone(),
+                // )
+                let fb_image_view = ImageView::new_default(img.clone()).unwrap();
+                
+                create_deferred_framebuffer_object(
+                    render_pass.clone(),
+                    // img.clone(),
+                    fb_image_view.clone(),
+                    depth_image_view.clone(),
+                    color_image_view.clone(),
+                    normal_image_view.clone(),
+                )
+            })
             .collect();
-    
+
         let sampler = Sampler::new(
             device.clone(),
             SamplerCreateInfo {
@@ -267,20 +313,41 @@ impl VulkanInstance {
             },
         )
         .unwrap();
-    
-        let graphics_pipeline =
-            deferred_pipeline::DeferredPipeline::new(window.clone(), device.clone(), render_pass.clone(), 0);
-        // let lighting_pipeline = 
-        //     lighting_pipeline::LightingPipeline::new(window.clone(), device.clone(), render_pass.clone(), 1);
-    
+
+        let basic_pipeline = basic_pipeline::BasicPipeline::new(
+            window.clone(),
+            device.clone(),
+            render_pass.clone(),
+            0,
+        );
+
+        let deferred_pipeline_object = deferred_pipeline::DeferredPipeline::new(
+            window.clone(),
+            device.clone(),
+            render_pass.clone(),
+            0,
+        );
+
+        let lighting_pipeline = lighting_pipeline::LightingPipeline::new(
+            window.clone(),
+            device.clone(),
+            render_pass.clone(),
+            1,
+        );
+
         RenderTargetInfo {
-            pipeline: graphics_pipeline.pipeline,
+            // pipeline: graphics_pipeline.pipeline,
+            pipeline: deferred_pipeline_object,
+            lighting_pipeline: lighting_pipeline,
             image_sampler: sampler,
+            attachments: RenderPassAttachments {
+                color_image_view: color_image_view,
+                normal_image_view: normal_image_view,
+            },
             // render_pass: render_pass,
             fbos: fbos,
         }
     }
-    
 
     pub fn get_device_type(&self) -> PhysicalDeviceType {
         self.physical.properties().device_type
@@ -303,10 +370,9 @@ impl VulkanInstance {
         self.swapchain_info.swapchain.clone()
     }
 
-    pub fn get_graphics_pipeline(&self) -> Arc<GraphicsPipeline> {
-        self.render_target.pipeline.clone()
-    }
-
+    // pub fn get_graphics_pipeline(&self) -> Arc<GraphicsPipeline> {
+    //     self.render_target.pipeline.clone()
+    // }
 
     pub fn refresh_instance_swapchain(&mut self, window: Arc<Window>) {
         let dimensions = window.inner_size().into();
@@ -318,13 +384,10 @@ impl VulkanInstance {
                 ..self.swapchain_info.swapchain.create_info()
             })
             .unwrap();
-    
+
         self.swapchain_info.swapchain = new_swapchain;
         self.swapchain_info.images = new_images;
     }
-    
-
-
 
     // creates a general buffer allocator
     fn create_buffer_allocator(device: Arc<Device>) -> GenericBufferAllocator {
@@ -351,7 +414,66 @@ impl VulkanInstance {
         ))
     }
 
-    fn create_render_pass(
+    fn create_deferred_render_pass(
+        device: Arc<Device>,
+        swapchain_info: &VulkanSwapchainInfo,
+    ) -> Arc<RenderPass> {
+        // need 3 things: device Arc, attachments, and a pass
+        let format = swapchain_info.swapchain.create_info().image_format.clone();
+
+        vulkano::ordered_passes_renderpass!(
+            device.clone(),
+            attachments: {
+
+                // each attachment has to be defined in this EXACT format order:
+                // format, samples, load_op, store_op
+                final_color: {
+                    format: format,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: Store,
+                },
+                color: {
+                    // format: vulkano::format::Format::A2B10G10R10_UINT_PACK32,
+                    format: vulkano::format::Format::R32G32B32A32_SFLOAT,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: Store,
+                },
+
+                normals: {
+                    // format: vulkano::format::Format::R16G16B16A16_SFLOAT
+                    format: vulkano::format::Format::R32G32B32A32_SFLOAT,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: DontCare,
+                },
+
+                depth: {
+                    format: vulkano::format::Format::D16_UNORM,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: DontCare
+                }
+            },
+
+            passes: [
+                {
+                    color: [color, normals],
+                    depth_stencil: {depth},
+                    input: []
+                },
+                {
+                    color: [final_color],
+                    depth_stencil: {}, // depth calculations were done by the previous pass
+                    input: [color, normals]
+                }
+            ]
+        )
+        .unwrap()
+    }
+
+    fn create_basic_render_pass(
         device: Arc<Device>,
         swapchain_info: &VulkanSwapchainInfo,
     ) -> Arc<RenderPass> {
@@ -392,7 +514,6 @@ impl VulkanInstance {
         )
         .unwrap()
     }
-
 }
 
 fn create_swapchain(
@@ -455,8 +576,25 @@ fn create_swapchain(
     }
 }
 
+fn create_deferred_framebuffer_object(
+    render_pass: Arc<RenderPass>,
+    final_image_view: Arc<ImageView>,
+    depth_stencil_view: Arc<ImageView>,
+    color_view: Arc<ImageView>,
+    normal_view: Arc<ImageView>,
+) -> Arc<Framebuffer> {
 
-fn create_framebuffer_object(
+    Framebuffer::new(
+        render_pass.clone(),
+        FramebufferCreateInfo {
+            attachments: vec![final_image_view, color_view, normal_view, depth_stencil_view],
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
+fn create_basic_framebuffer_object(
     render_pass: Arc<RenderPass>,
     image: Arc<Image>,
     depth_stencil_image: Arc<Image>,

@@ -39,6 +39,8 @@ use super::primitives::GenericBufferAllocator;
 //      descriptor set with the descriptor set and returns the
 //      PersistentDescriptorSet object which can be passed into
 //      a command buffer build
+
+#[derive(Clone)]
 pub struct UniformSet {
     pub descriptor_set_index: usize,
     pub uniforms: Vec<UniformBuffer>,
@@ -86,7 +88,7 @@ impl UniformSet {
     pub fn get_dynamic_descriptor_set() {}
 
     // Creates a new uniform buffer and attaches it to the uniform set
-    pub fn add_uniform_buffer<T>(
+    pub fn add_ordered_uniform_buffer<T>(
         &mut self,
         buffer_allocator: GenericBufferAllocator,
         data: T,
@@ -103,6 +105,14 @@ impl UniformSet {
         );
 
         self.uniforms.push(uniform_buffer);
+    }
+
+    pub fn add_uniform_buffer(&mut self, uniform_buffer: UniformBuffer) {
+        self.uniforms.push(uniform_buffer);
+    }
+
+    pub fn add_multiple_buffers(&mut self, buffers: Vec<UniformBuffer>) {
+        self.uniforms = self.uniforms.iter().chain(buffers.iter()).cloned().collect();
     }
 }
 

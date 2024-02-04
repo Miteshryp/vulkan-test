@@ -10,42 +10,30 @@ pub mod vs {
         src: r"
             #version 460
 
-            layout(push_constant) uniform PushConstantData {
-                float view;
-            } pc;
-            
-            layout(set = 1, binding = 2) uniform MvpMatrix {
+            layout(set = 0, binding = 0) uniform MvpMatrix {
                 mat4 model;
                 mat4 view;
                 mat4 projection;
             } mvp;
+
+            // Vertex Attibutes
+            layout(location = 0) in vec3 position;
+            layout(location = 1) in vec3 normal;
+            layout(location = 2) in vec3 color;
+            layout(location = 3) in vec2 tex_coord;
+
+            // Instance attributes
+            layout(location = 4) in vec3 global_position;
+            layout(location = 5) in float local_scale;
+            layout(location = 6) in uint tex_index;
     
             
             // Vertex inputs
-            layout(location = 0) in vec3 position;
-            layout(location = 1) in vec3 color;
-            layout(location = 2) in vec2 tex_coord;
-
-            // Instance inputs
-            layout(location = 3) in vec3 global_position;
-            layout(location = 4) in float local_scale;
-            layout(location = 5) in uint tex_index;
-
-
-            // Vertex Outputs
-            layout(location = 0) out vec3 out_color;
-            layout(location = 1) out float v;
-            layout(location = 2) out vec2 textureMapping;
-            layout(location = 3) out uint texture_index;
+            // layout(location = 0) in vec3 position; // What is this position? - Shader only runs on the fragments covered by the vertices, so we will have to pass this vertex into the rasterizer to obtain the correct fragments to process.
             
             void main() {
-                vec4 player_position = mvp.model * vec4(position.xyz * local_scale + global_position, 1.0);
+                vec4 player_position = mvp.model * vec4(position * local_scale + global_position, 1.0);
                 gl_Position = mvp.projection * mvp.view * player_position;
-                out_color = color;
-                
-                v = pc.view;
-                textureMapping = tex_coord;
-                texture_index = tex_index;
             }
             ",
     );
@@ -57,35 +45,20 @@ pub mod fs {
         src: "
             #version 460
 
-            layout(location = 0) in vec3 color;
-            layout(location = 1) in float v;
-            layout(location = 2) in vec2 tex_coord;
-            layout(location = 3) flat in uint tex_index;
+            layout(input_attachment_index = 0, set = 1, binding = 0) uniform subpassInput attachment_color;
+            layout(input_attachment_index = 1, set = 1, binding = 1) uniform subpassInput attachment_normals;
 
-            // flat keyword signifies that the attribute is pulled only once from the \"provoking vertex\", and not from every fragment in the rendering zone.
-            
-            
-            layout(push_constant) uniform PushConstantData {
-                float view;
-            } pc;
-
-            layout(set = 1, binding = 0) uniform sampler s; 
-            // layout(set = 1, binding = 1) uniform texture2D tex;
-            layout(set = 1, binding = 1) uniform texture2DArray tex;
-
-
-            layout(set = 1, binding = 2) uniform MvpMatrix {
+            layout(set = 0, binding = 0) uniform MvpMatrix {
                 mat4 model;
                 mat4 view;
                 mat4 projection;
             } mvp;
 
             layout(location = 0) out vec4 f_color;
-    
+            
             void main() {
-                // float dist = normalize(gl_FragCoord.xy).y;
-                // f_color = texture(sampler2D(tex, s), tex_coord) + vec4(color.x + sin(pc.view), color.y, color.z + cos(pc.view), dist);
-                f_color = texture(sampler2DArray(tex, s), vec3(tex_coord, tex_index));
+                vec4 new_color = vec4(subpassLoad(attachment_color).rgb, 1.0);
+                f_color = vec4(0.0,1.0,0.5,1.0);
             }
         ",
     );

@@ -23,12 +23,17 @@ pub type PrimaryAutoCommandBuilderType = AutoCommandBufferBuilder<
 pub struct VertexData {
     #[format(R32G32B32_SFLOAT)]
     pub position: Vec3,
-
+    
+    #[format(R32G32B32_SFLOAT)]
+    pub normal: Vec3,
+    
     #[format(R32G32B32_SFLOAT)]
     pub color: Vec3,
 
     #[format(R32G32_SFLOAT)]
     pub tex_coord: Vec2,   
+
+
 }
 
 #[derive(BufferContents, Vertex, Debug, Clone)]

@@ -9,55 +9,43 @@ pub mod vs {
         ty: "vertex",
         src: r"
             #version 460
-
-
-            layout(push_constant) uniform PushConstantData {
-                float view;
-            } pc;
-
-            // layout(set = 1, binding = 0) uniform Data {
-            //     float view;
-            // } uniforms;
-
             
-            layout(set = 1, binding = 2) uniform MvpMatrix {
+            layout(set = 0, binding = 0) uniform MvpMatrix {
                 mat4 model;
                 mat4 view;
                 mat4 projection;
             } mvp;
     
-    
+            // Vertex Attibutes
             layout(location = 0) in vec3 position;
-            layout(location = 1) in vec3 color;
-            layout(location = 2) in vec2 tex_coord;
-            
+            layout(location = 1) in vec3 normal;
+            layout(location = 2) in vec3 color;
+            layout(location = 3) in vec2 tex_coord;
 
-            layout(location = 3) in vec3 global_position;
-            layout(location = 4) in float local_scale;
-            layout(location = 5) in uint tex_index;
+            // Instance attributes
+            layout(location = 4) in vec3 global_position;
+            layout(location = 5) in float local_scale;
+            layout(location = 6) in uint tex_index;
 
             layout(location = 0) out vec3 out_color;
-            layout(location = 1) out float v;
-            layout(location = 2) out vec2 textureMapping;
-            layout(location = 3) out uint texture_index;
+            layout(location = 1) out vec2 out_textureMapping;
+            layout(location = 2) out uint out_texture_index;
+            layout(location = 3) out vec3 out_normal;
             
-            void main() {
-                vec4 player_position = mvp.model * vec4(position.xyz * local_scale + global_position, 1.0);
-                // player_position +=;
-
-                // gl_Position =  mvp.projection * mvp.view * mvp.model * vec4(position.xyz, 1.0);
-
-                gl_Position = mvp.projection * mvp.view * player_position;
-                out_color = color;
+            void main() {                
+                gl_Position = mvp.projection * mvp.view * mvp.model * vec4(position.xyz * local_scale + global_position, 1.0);
                 
-                // v = uniforms.view;
-                v = pc.view;
-                textureMapping = tex_coord;
-                texture_index = tex_index;
+                out_color = color;
+                out_textureMapping = tex_coord;
+                out_texture_index = tex_index;
+                out_normal = mat3(mvp.model) * normal;
             }
             ",
     );
 }
+
+// flat keyword signifies that the attribute is pulled only once from the \"provoking vertex\", and not from every fragment in the rendering zone.
+
 
 pub mod fs {
     vulkano_shaders::shader!(
@@ -66,38 +54,23 @@ pub mod fs {
             #version 460
 
             layout(location = 0) in vec3 color;
-            layout(location = 1) in float v;
-            layout(location = 2) in vec2 tex_coord;
-            layout(location = 3) flat in uint tex_index;
-
-            // flat keyword signifies that the attribute is pulled only once from the \"provoking vertex\", and not from every fragment in the rendering zone.
+            layout(location = 1) in vec2 tex_coord;
+            layout(location = 2) flat in uint tex_index;
+            layout(location = 3) in vec3 in_normal;
             
-            
-            layout(push_constant) uniform PushConstantData {
-                float view;
-            } pc;
 
-            layout(set = 1, binding = 0) uniform sampler s; 
-            // layout(set = 1, binding = 1) uniform texture2D tex;
-            layout(set = 1, binding = 1) uniform texture2DArray tex;
+            layout(set = 0, binding = 1) uniform sampler s; 
+            // layout(set = 0, binding = 1) uniform texture2D tex;
+            layout(set = 0, binding = 2) uniform texture2DArray tex;
 
-
-
-
-            layout(set = 1, binding = 2) uniform MvpMatrix {
-                mat4 model;
-                mat4 view;
-                mat4 projection;
-            } mvp;
-
+            // For next pass (lighting), we need to pass the color and normal for the fragment
             layout(location = 0) out vec4 f_color;
-    
-            void main() {
-                float dist = normalize(gl_FragCoord.xy).y;
-                // f_color = vec4(1.0, dist, 0.0, 0.2);
-                // f_color = vec4(sin(v), dist, 0.0, 1);
-                // f_color = texture(sampler2D(tex, s), tex_coord) + vec4(color.x + sin(pc.view), color.y, color.z + cos(pc.view), dist);
+            layout(location = 1) out vec3 f_normal;
+            
+            
+            void main() {            
                 f_color = texture(sampler2DArray(tex, s), vec3(tex_coord, tex_index));
+                f_normal = in_normal;
             }
         ",
     );

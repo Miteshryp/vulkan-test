@@ -83,6 +83,8 @@ impl Camera {
     pub fn rotate(&mut self, yaw:f32, pitch: f32) {
         self.yaw += f32::to_radians(yaw);
         self.pitch += f32::to_radians(pitch);
+
+        self.pitch = self.pitch.max(f32::to_radians(-89.9)).min(f32::to_radians(89.9));
         
         self.update_vectors();
     }

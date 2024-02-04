@@ -53,7 +53,9 @@ impl StagingImageArrayBuffer {
     pub fn add_image_data(&mut self, data: &Vec<u8>) {
         
         // Only images of allowed size is taken into the image buffer
-        // std::assert!(data.len() as u32 == self.width * self.height * self.channel_count);
+
+        println!("Data len: {}", data.len());
+        std::assert!(data.len() as u32 == self.width * self.height * self.channel_count, "{} * {} * {} and {}",self.width, self.height, self.channel_count, data.len());
 
         self.image_buffer.add_vec(data);
     }

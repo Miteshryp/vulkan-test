@@ -3,7 +3,7 @@ mod graphics_pack;
 
 use image::{
     codecs::png::{self, PngDecoder},
-    io, GenericImageView, ImageBuffer, ImageDecoder, ImageFormat,
+    io, DynamicImage, GenericImageView, ImageBuffer, ImageDecoder, ImageFormat,
 };
 use nalgebra_glm as glm;
 
@@ -21,10 +21,12 @@ use graphics_pack::{
         uploader::BufferUploader,
         vulkan::{VulkanInstance, VulkanSwapchainInfo},
     },
-    shaders::{self, deferred},
+    pipelines::base_pipeline::GraphicsPipelineBuilder,
+    shaders::{self, deferred, lighting},
 };
+use smallvec::SmallVec;
 
-use std::{io::Read, process::exit, sync::Arc, time::SystemTime};
+use std::{env, io::Read, process::exit, sync::Arc, time::SystemTime};
 use vulkano::{
     buffer::{BufferContents, BufferUsage, Subbuffer},
     command_buffer::{
@@ -35,6 +37,7 @@ use vulkano::{
         AutoCommandBufferBuilder, CommandBufferLevel, CommandBufferUsage, CopyBufferInfo,
         CopyBufferToImageInfo, CopyImageToBufferInfo, PrimaryAutoCommandBuffer,
         PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents,
+        SubpassEndInfo,
     },
     image::{
         sampler::{Sampler, SamplerAddressMode, SamplerCreateInfo},
@@ -45,7 +48,7 @@ use vulkano::{
     memory::allocator::{
         AllocationCreateInfo, GenericMemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
     },
-    pipeline::{Pipeline, PipelineBindPoint},
+    pipeline::{GraphicsPipeline, Pipeline, PipelineBindPoint},
     swapchain::{self, SwapchainPresentInfo},
     sync::{self, GpuFuture},
     Validated, Version, VulkanError, VulkanLibrary,
@@ -97,7 +100,7 @@ fn winit_handle_window_events(
                     println!("Left click detected");
                 }
                 MouseButton::Right => {
-                    println!("Right click detected")
+                    println!("Right click detected");
                 }
                 _ => (),
             },
@@ -121,92 +124,27 @@ fn winit_handle_window_events(
         } => {
             input_handler.update_input(key_event);
         }
-        // match key_event.state {
-        //     ElementState::Pressed => match key_event.key_without_modifiers().as_ref() {
-        //         Key::Character("w") => {
-        //             println!("Forward");
-        //             unsafe {
-        //                 // camera.z -= MOVE_SPEED;
-        //                 camera.move_forward(MOVE_SPEED);
-        //             }
-        //         }
-        //         Key::Character("a") => {
-        //             println!("Left");
-        //             unsafe {
-        //                 // camera.x -= MOVE_SPEED;
-        //                 camera.move_left(MOVE_SPEED);
-        //             }
-        //         }
-        //         Key::Character("s") => {
-        //             println!("Backward");
-        //             unsafe {
-        //                 // camera.z += MOVE_SPEED;
-        //                 camera.move_backward(MOVE_SPEED);
-        //             }
-        //         }
-        //         Key::Character("d") => {
-        //             println!("Right");
-        //             unsafe {
-        //                 // camera.x += MOVE_SPEED;
-        //                 camera.move_right(MOVE_SPEED);
-        //             }
-        //         }
-        //         _ => (),
-        //     },
-        //     _ => (),
-        // },
+
         _ => (),
     }
-    return;
-
-    // match key_event.state {
-    //     ElementState::Pressed => match key_event.physical_key {
-    //         PhysicalKey::Code(KeyCode::KeyA) => {
-    //             println!("Left");
-    //             unsafe {
-    //                 camera.x -= MOVE_SPEED;
-    //             }
-    //         }
-    //         PhysicalKey::Code(KeyCode::KeyD) => {
-    //             println!("Right");
-    //             unsafe {
-    //                 camera.x += MOVE_SPEED;
-    //             }
-    //         }
-    //         PhysicalKey::Code(KeyCode::KeyW) => {
-    //             println!("Forward");
-    //             unsafe {
-    //                 camera.z -= MOVE_SPEED;
-    //             }
-    //         }
-    //         PhysicalKey::Code(KeyCode::KeyS) => {
-    //             println!("Backward");
-    //             unsafe {
-    //                 camera.z += MOVE_SPEED;
-    //             }
-    //         }
-    //         _ => (),
-    //     },
-
-    //     ElementState::Released => {}
-    // }
 }
+
+
 
 fn update_camera_position(camera: &mut Camera, input_handler: &KeyboardInputHandler) {
     unsafe {
-        if(input_handler.is_pressed(KeyCode::KeyW)) {
+        if (input_handler.is_pressed(KeyCode::KeyW)) {
             camera.move_forward(MOVE_SPEED);
         }
-        if(input_handler.is_pressed(KeyCode::KeyS)) {
+        if (input_handler.is_pressed(KeyCode::KeyS)) {
             camera.move_backward(MOVE_SPEED);
         }
-        if(input_handler.is_pressed(KeyCode::KeyA)) {
+        if (input_handler.is_pressed(KeyCode::KeyA)) {
             camera.move_left(MOVE_SPEED);
         }
-        if(input_handler.is_pressed(KeyCode::KeyD)) {
+        if (input_handler.is_pressed(KeyCode::KeyD)) {
             camera.move_right(MOVE_SPEED);
         }
-
     }
 }
 
@@ -248,126 +186,150 @@ fn create_cube_vertices() -> (Vec<VertexData>, Vec<u32>) {
         // front face
         VertexData {
             position: Vec3::new(-1.0, -1.0, 1.0),
+            normal: Vec3::new(0.0, 0.0, 1.0),
             color: color1.clone(),
             tex_coord: Vec2::new(0.0, 0.0),
         },
         VertexData {
             position: Vec3::new(1.0, -1.0, 1.0),
+            normal: Vec3::new(0.0, 0.0, 1.0),
             color: color3.clone(),
             tex_coord: Vec2::new(1.0, 0.0),
         },
         VertexData {
             position: Vec3::new(1.0, 1.0, 1.0),
+            normal: Vec3::new(0.0, 0.0, 1.0),
             color: color2.clone(),
             tex_coord: Vec2::new(1.0, 1.0),
         },
         VertexData {
             position: Vec3::new(-1.0, 1.0, 1.0),
+            normal: Vec3::new(0.0, 0.0, 1.0),
             color: color2.clone(),
             tex_coord: Vec2::new(0.0, 1.0),
         },
         // Back face
         VertexData {
             position: Vec3::new(1.0, -1.0, -1.0),
+            normal: Vec3::new(0.0, 0.0, -1.0),
             color: color3.clone(),
             tex_coord: Vec2::new(0.0, 0.0),
         },
         VertexData {
             position: Vec3::new(-1.0, -1.0, -1.0),
+            normal: Vec3::new(0.0, 0.0, -1.0),
             color: color1.clone(),
             tex_coord: Vec2::new(1.0, 0.0),
         },
         VertexData {
             position: Vec3::new(-1.0, 1.0, -1.0),
+            normal: Vec3::new(0.0, 0.0, -1.0),
             color: color2.clone(),
             tex_coord: Vec2::new(1.0, 1.0),
         },
         VertexData {
             position: Vec3::new(1.0, 1.0, -1.0),
+            normal: Vec3::new(0.0, 0.0, -1.0),
             color: color2.clone(),
             tex_coord: Vec2::new(0.0, 1.0),
         },
         // Left face
         VertexData {
             position: Vec3::new(-1.0, -1.0, -1.0),
+            normal: Vec3::new(-1.0, 0.0, 0.0),
             color: color3.clone(),
             tex_coord: Vec2::new(0.0, 0.0),
         },
         VertexData {
             position: Vec3::new(-1.0, -1.0, 1.0),
+            normal: Vec3::new(-1.0, 0.0, 0.0),
             color: color1.clone(),
             tex_coord: Vec2::new(1.0, 0.0),
         },
         VertexData {
             position: Vec3::new(-1.0, 1.0, 1.0),
+            normal: Vec3::new(-1.0, 0.0, 0.0),
             color: color2.clone(),
             tex_coord: Vec2::new(1.0, 1.0),
         },
         VertexData {
             position: Vec3::new(-1.0, 1.0, -1.0),
+            normal: Vec3::new(-1.0, 0.0, 0.0),
             color: color2.clone(),
             tex_coord: Vec2::new(0.0, 1.0),
         },
         // Right face
         VertexData {
             position: Vec3::new(1.0, -1.0, 1.0),
+            normal: Vec3::new(1.0, 0.0, 0.0),
             color: color1.clone(),
             tex_coord: Vec2::new(0.0, 0.0),
         },
         VertexData {
             position: Vec3::new(1.0, -1.0, -1.0),
+            normal: Vec3::new(1.0, 0.0, 0.0),
             color: color3.clone(),
             tex_coord: Vec2::new(1.0, 0.0),
         },
         VertexData {
             position: Vec3::new(1.0, 1.0, -1.0),
+            normal: Vec3::new(1.0, 0.0, 0.0),
             color: color2.clone(),
             tex_coord: Vec2::new(1.0, 1.0),
         },
         VertexData {
             position: Vec3::new(1.0, 1.0, 1.0),
+            normal: Vec3::new(1.0, 0.0, 0.0),
             color: color2.clone(),
             tex_coord: Vec2::new(0.0, 1.0),
         },
         // Top face
         VertexData {
             position: Vec3::new(-1.0, -1.0, -1.0),
+            normal: Vec3::new(0.0, -1.0, 0.0),
             color: color3.clone(),
             tex_coord: Vec2::new(0.0, 0.0),
         },
         VertexData {
             position: Vec3::new(1.0, -1.0, -1.0),
+            normal: Vec3::new(0.0, -1.0, 0.0),
             color: color1.clone(),
             tex_coord: Vec2::new(1.0, 0.0),
         },
         VertexData {
             position: Vec3::new(1.0, -1.0, 1.0),
+            normal: Vec3::new(0.0, -1.0, 0.0),
             color: color2.clone(),
             tex_coord: Vec2::new(1.0, 1.0),
         },
         VertexData {
             position: Vec3::new(-1.0, -1.0, 1.0),
+            normal: Vec3::new(0.0, -1.0, 0.0),
             color: color2.clone(),
             tex_coord: Vec2::new(0.0, 1.0),
         },
         // Bottom face
         VertexData {
             position: Vec3::new(-1.0, 1.0, 1.0),
+            normal: Vec3::new(0.0, 1.0, 0.0),
             color: color3.clone(),
             tex_coord: Vec2::new(0.0, 0.0),
         },
         VertexData {
             position: Vec3::new(1.0, 1.0, 1.0),
+            normal: Vec3::new(0.0, 1.0, 0.0),
             color: color1.clone(),
             tex_coord: Vec2::new(1.0, 0.0),
         },
         VertexData {
             position: Vec3::new(1.0, 1.0, -1.0),
+            normal: Vec3::new(0.0, 1.0, 0.0),
             color: color2.clone(),
             tex_coord: Vec2::new(1.0, 1.0),
         },
         VertexData {
             position: Vec3::new(-1.0, 1.0, -1.0),
+            normal: Vec3::new(0.0, 1.0, 0.0),
             color: color2.clone(),
             tex_coord: Vec2::new(0.0, 1.0),
         },
@@ -401,21 +363,25 @@ fn create_square_geometry() -> (Vec<VertexData>, Vec<u32>) {
     let vertices = Vec::from([
         VertexData {
             position: Vec3::new(-1.0, -1.0, -0.5),
+            normal: Vec3::new(0.0, 0.0, -1.0),
             color: color1.clone(),
             tex_coord: Vec2::new(0.0, 0.0),
         },
         VertexData {
             position: Vec3::new(1.0, -1.0, -0.5),
+            normal: Vec3::new(0.0, 0.0, -1.0),
             color: color3.clone(),
             tex_coord: Vec2::new(1.0, 0.0),
         },
         VertexData {
             position: Vec3::new(1.0, 1.0, -0.5),
+            normal: Vec3::new(0.0, 0.0, -1.0),
             color: color2.clone(),
             tex_coord: Vec2::new(1.0, 1.0),
         },
         VertexData {
             position: Vec3::new(-1.0, 1.0, -0.5),
+            normal: Vec3::new(0.0, 0.0, -1.0),
             color: color2.clone(),
             tex_coord: Vec2::new(0.0, 1.0),
         },
@@ -503,11 +469,14 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
     // let image_view = ImageView::new_default(image_object).unwrap();
 
+    // let sampler_uniform =
+    //     UniformBuffer::create_immutable_sampler(0, instance.render_target.image_sampler.clone());
     let sampler_uniform =
-        UniformBuffer::create_immutable_sampler(0, instance.render_target.image_sampler.clone());
+        UniformBuffer::create_immutable_sampler(1, instance.render_target.image_sampler.clone());
 
     // Writing texture data into the uniform
-    let texture_uniform = UniformBuffer::create_image_view(1, image_view.clone()); // Single texture write
+    // let texture_uniform = UniformBuffer::create_image_view(1, image_view.clone()); // Single texture write
+    let texture_uniform = UniformBuffer::create_image_view(2, image_view.clone()); // Single texture write
                                                                                    // let texture_uniform = UniformBuffer::create_image_view_array(1, image_view.clone());
 
     el.set_control_flow(ControlFlow::Poll);
@@ -524,9 +493,9 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             device_id,
             event: DeviceEvent::MouseMotion { delta },
         } => {
-            let senX = 0.5;
-            let senY = 0.3;
-            camera.rotate(delta.0 as f32 * senX, delta.1 as f32 * senY);
+            let sen_x = 0.5;
+            let sen_y = 0.3;
+            camera.rotate(delta.0 as f32 * sen_x, delta.1 as f32 * sen_y);
             // println!("Mouse moved: {:?}", delta);
             // Rotate the mouse based on this (delta / sensitivity_factor)
         }
@@ -558,60 +527,43 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
             // let mut uniform_set = UniformSet::new(0);
 
-            // uniform 0
-            // {
-
+            
             // let mut data = shaders::vs::Data {
-            let mut data = shaders::deferred::vs::PushConstantData {
-                view: unsafe { START.unwrap().elapsed().unwrap().as_secs_f32() },
-            };
+            // let mut data = shaders::basic::vs::PushConstantData {
+            //     view: unsafe { START.unwrap().elapsed().unwrap().as_secs_f32() },
+            // };
 
-            // uniform_set.add_uniform_buffer(
-            //     instance.allocators.memory_allocator.clone(),
-            //     instance.get_graphics_pipeline(),
-            //     data,
-            //     Default::default(),
-            // );
-            // let mut uni0 = UniformBuffer::create(
-            //     instance.allocators.memory_allocator.clone(),
-            //     0,
-            //     data,
-            //     Default::default(),
-            // );
-            // }
-
-            // let mut model = glm::identi();
-            // let mut view = camera.get_view_matrix_data();
-            // let mut projection = camera.get_projection_matrix_data();
-
-            // uniform 1
-            // {
 
             let model = glm::identity::<f32, 4>();
             let view = camera.get_view_matrix_data();
             let projection = camera.get_projection_matrix_data();
 
-            let mut data1 = shaders::deferred::vs::MvpMatrix {
+            let mut mvp_data = shaders::basic::vs::MvpMatrix {
                 model: Into::<[[f32; 4]; 4]>::into(model),
                 view: Into::<[[f32; 4]; 4]>::into(view),
                 projection: Into::<[[f32; 4]; 4]>::into(projection),
             };
 
-            // println!("{:?}", view);
-
-            // uniform_set.add_uniform_buffer(
-            //     instance.allocators.memory_allocator.clone(),
-            //     instance.get_graphics_pipeline(),
-            //     data,
-            //     Default::default(),
-            // );
-            let mut uni1 = UniformBuffer::create(
+            let mut mvp_uniform = UniformBuffer::create(
                 instance.allocators.memory_allocator.clone(),
-                2,
-                data1,
+                // 1,
+                0,
+                mvp_data,
                 Default::default(),
             );
-            // }
+
+
+
+            let mut attachment_color = UniformBuffer::create_image_view(
+                0,
+                instance.render_target.attachments.color_image_view.clone(),
+            );
+            let mut attachment_normal = UniformBuffer::create_image_view(
+                1,
+                instance.render_target.attachments.normal_image_view.clone(),
+            );
+
+
 
             let mut vertex_staging_buffer = StagingBuffer::new();
             vertex_staging_buffer.add_vec(&vertices);
@@ -648,8 +600,9 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
                 device_index_buffer,
                 device_instance_buffer,
                 // image_data,
-                vec![uni1, sampler_uniform.clone(), texture_uniform.clone()],
-                data,
+                vec![mvp_uniform, sampler_uniform.clone(), texture_uniform.clone()],
+                // vec![attachment_color, attachment_normal], // None,
+                vec![attachment_color]
             );
 
             let (image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
@@ -763,7 +716,7 @@ fn create_command_buffers(
     device_instance_buffer: DeviceBuffer<InstanceData>,
 
     uniforms: Vec<UniformBuffer>,
-    push_constant_data: shaders::deferred::vs::PushConstantData, // uniform_buffer_data: graphics_pack::shaders::vs::Data,
+    attachments: Vec<UniformBuffer>, // push_constant_data: Option<impl BufferContents + Clone>, // uniform_buffer_data: graphics_pack::shaders::vs::Data,
 ) -> Vec<CommandBufferType> {
     // TODO:
     // 1. Get the buffer from the staging buffer object
@@ -771,7 +724,9 @@ fn create_command_buffers(
     // 3. Transfer the data into a final buffer using a new upload command buffer
     // 4. Pass the final buffer into the fbo builder function
 
-    let graphics_pipeline = instance.get_graphics_pipeline();
+    // let graphics_pipeline = instance.get_graphics_pipeline();
+    let graphics_pipeline = instance.render_target.pipeline.clone();
+    let lighting_pipeline = instance.render_target.lighting_pipeline.clone();
 
     instance
         .render_target
@@ -785,13 +740,41 @@ fn create_command_buffers(
             )
             .unwrap();
 
+            // Push descriptor writes
+            let push_descriptor_writes: SmallVec<_> = uniforms
+                .clone()
+                .into_iter()
+                .map(|ub| ub.get_write_descriptor())
+                .collect();
+
+            // let attachment_writes: SmallVec<_> = attachments
+            //     .clone()
+            //     .into_iter()
+            //     .map(|ub| ub.get_write_descriptor())
+            //     .collect();
+
+            let mut attachment_set = UniformSet::new(
+                lighting_pipeline
+                    .get_attachment_descriptor_set_index()
+                    .unwrap() as usize
+            );
+            attachment_set.add_multiple_buffers(attachments.clone());
+
             // NOTE: This structure is only used to bind dynamic data to the graphics pipeline
             // Any modifications to the rendering stages have to be done in the
             // graphics pipeline while it is created.
             command_builder
                 .begin_render_pass(
                     RenderPassBeginInfo {
-                        clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into()), Some(1.0.into())],
+                        // clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into()), Some(1.0.into())],
+                        // clear_values: vec![Some([0.0,0.0,0.0,1.0].into())],
+                        clear_values: vec![
+                            Some([0.0, 0.0, 0.0, 1.0].into()),
+                            // Some([0_u32, 0, 0, 1].into()),
+                            Some([0.0,0.0,0.0,1.0].into()),
+                            Some([0.0, 0.0, 0.0, 1.0].into()),
+                            Some(1.0.into()),
+                        ],
                         ..RenderPassBeginInfo::framebuffer(fb.clone())
                     },
                     SubpassBeginInfo {
@@ -799,16 +782,18 @@ fn create_command_buffers(
                         ..Default::default()
                     },
                 )
-                .unwrap()
-                .bind_pipeline_graphics(graphics_pipeline.clone())
+                .unwrap();
+
+            // First Render Pass
+
+            command_builder
+                .bind_pipeline_graphics(graphics_pipeline.pipeline.clone())
                 .unwrap();
 
             // Binding buffers
             command_builder
-                // .bind_index_buffer(index_subbuffer)
                 .bind_index_buffer(device_index_buffer.buffer.clone())
                 .unwrap()
-                // .bind_vertex_buffers(0, (vertex_subbuffer, instance_subbuffer))
                 .bind_vertex_buffers(
                     0,
                     (
@@ -828,33 +813,20 @@ fn create_command_buffers(
             //     )
             //     .unwrap();
 
-            let push_descriptor_writes = uniforms
-                .clone()
-                .into_iter()
-                .map(|ub| ub.get_write_descriptor())
-                .collect();
-            let mut push_descriptor_index: u32 = 0;
-            unsafe {
-                push_descriptor_index = PUSH_DESCRIPTOR_INDEX as u32;
-            }
-
+            // Push Descriptors
             command_builder
                 .push_descriptor_set(
                     PipelineBindPoint::Graphics,
-                    graphics_pipeline.layout().clone(),
-                    push_descriptor_index, // index of set where the data is being written,
-                    push_descriptor_writes,
+                    graphics_pipeline.pipeline.layout().clone(),
+                    // push_descriptor_index, // index of set where the data is being written,
+                    graphics_pipeline.get_push_descriptor_set_index(),
+                    push_descriptor_writes.clone(),
                 )
                 .unwrap();
 
-            command_builder
-                .push_constants(graphics_pipeline.layout().clone(), 0, push_constant_data)
-                .unwrap();
-
+            
             // Draw call
             command_builder
-                // NOTE: This is the draw call used for indexed rendering
-                // .draw_indexed(index_count, index_count / 3, 0, 0, 0)
                 .draw_indexed(
                     device_index_buffer.count,
                     device_index_buffer.count / 3,
@@ -862,9 +834,76 @@ fn create_command_buffers(
                     0,
                     0,
                 )
-                .unwrap()
-                .end_render_pass(Default::default())
                 .unwrap();
+
+
+
+
+
+            // Second pass
+
+            command_builder
+                .next_subpass(
+                    Default::default(),
+                    SubpassBeginInfo {
+                        contents: SubpassContents::Inline,
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+                .bind_pipeline_graphics(lighting_pipeline.pipeline.clone())
+                .unwrap();
+
+            // Binding buffers
+            command_builder
+                .bind_vertex_buffers(
+                    0,
+                    (
+                        device_vertex_buffer.buffer.clone(),
+                        device_instance_buffer.buffer.clone(),
+                    ),
+                )
+                .unwrap()
+                .bind_index_buffer(device_index_buffer.buffer.clone())
+                .unwrap();
+
+
+            // Push Descriptors
+            command_builder
+                .push_descriptor_set(
+                    GraphicsPipeline::bind_point(&lighting_pipeline.pipeline),
+                    lighting_pipeline.pipeline.layout().clone(),
+                    lighting_pipeline.get_push_descriptor_set_index(),
+                    // TODO: Change this to a better solution
+                    smallvec::smallvec![push_descriptor_writes[0].clone()], // Only taking the MVP for now.
+                                                                            // push_descriptor_writes.clone()
+                )
+                .unwrap();
+
+            command_builder
+                .bind_descriptor_sets(
+                    lighting_pipeline.pipeline.bind_point(),
+                    lighting_pipeline.pipeline.layout().clone(),
+                    lighting_pipeline.get_attachment_descriptor_set_index().unwrap(),
+                    vec![attachment_set.clone().get_persistent_descriptor_set(
+                        instance.allocators.descriptor_set_allocator.clone(),
+                        lighting_pipeline.pipeline.clone(),
+                    )],
+                )
+                .unwrap();
+
+            command_builder
+                .draw_indexed(
+                    device_index_buffer.count,
+                    device_index_buffer.count / 3,
+                    0,
+                    0,
+                    0,
+                )
+                .unwrap();
+
+            // Ending render pass
+            command_builder.end_render_pass(Default::default()).unwrap();
 
             let cb = command_builder.build().unwrap();
             return cb;
@@ -884,19 +923,35 @@ fn create_command_buffers(
 */
 
 fn load_image(path: String) -> (Vec<u8>, (u32, u32)) {
-    let dynamic_image = io::Reader::open(path)
-        .unwrap()
-        .with_guessed_format()
-        .unwrap()
-        .decode()
-        .unwrap();
-    let image_dimensions = dynamic_image.dimensions();
-    let image_buffer = dynamic_image.as_bytes();
+    // let dynamic_image = io::Reader::open(path)
+    //     .unwrap()
+    //     .with_guessed_format()
+    //     .unwrap()
+    //     .decode()
+    //     .unwrap();
 
-    (image_buffer.to_vec(), image_dimensions)
+    let dynamic_image = image::open(path).unwrap();
+
+    // only supporting 8bit image channels for now
+    // TODO: Implement support to load and process images with different channel width in the rendering system
+    let format = match dynamic_image.color() {
+        image::ColorType::Rgba8 => Ok(()),
+        _ => Err("Image does not have a 8bit channel"),
+    }
+    .unwrap();
+
+    // dynamic_image.resize(128, 128, image::imageops::FilterType::Gaussian);
+
+    let image_dimensions = dynamic_image.dimensions();
+    let image_buffer: Vec<u8> = dynamic_image.into_bytes();
+    // let image_buffer = dynamic_image.as_bytes();
+
+    // (image_buffer.to_vec(), image_dimensions)
+    (image_buffer, image_dimensions)
 }
 
 fn main() {
+    // env::set_var("RUST_BACKTRACE", "1");
     unsafe {
         START = Some(SystemTime::now());
     }

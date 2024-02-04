@@ -94,6 +94,10 @@ However, one thing to note here is that the texture or sampler2D object in the s
 ## Questions
 1. How do we pass in an array of textures - Using textureArray instead of texture object. It requires some different configurations, which I am yet to explore (Refer the texture array example in the docs examples)
 
+2. Can we modify the contents of an image after binding it to an image view object?
+Guess - We should be able to do this since an image is just a location in memory, which is bound to a image view object. So image view should just contain the pointer to the image data. Us modifying the image data should not have any difference in the image view operation.
+
+
 
 # DEFERRED RENDERING 
 
