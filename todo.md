@@ -3,22 +3,19 @@
 [x] Multipass / Deffered rendering
     - [x] Find a solution to image view binding requirement for attachment image buffers
 
-    - [] Modularize the code by creating "Renderers"
-        - [] Store the push descriptor data in the renderer and create functions to pass the appropriate push descriptor data
-        - [] Write functions to pass the correct attachment in the descriptor set write assigned for intermidiate attachments.        
+    - [x] Modularize the code by creating "Renderers"       
 
     - [x] Find out why the formatting change is not working in render subpass attachments - Stupid mistake (I passed UINT instead of a UNORM)
 
-[] Modify the load_image function to return the format of the image along with the data, which could then be used to create images of appropriate format for the image data. (This could be used to load images other than 8bit channel format)
+[] Document learnings from Deferred rendering solution in the notes.md file
+
+[] Explore interfacing common renderer functions
+[] Create a input manager class, which could have callbacks attached to each input
+[] Learn how to implement a cubemap
+[] Model loading
 
 
-# SHORT NOTES (Will remove later)
 
-- All attachment specific to the render pass used by the renderer are stored in the renderer now. Any attachment required can be fetched in the renderer struct implementation.
-
-- Renderer will explicitly bind the required attachment to the corresponding subpass pipeline shader.
-
-- Renderer will also explicitly store data that is being passed in the push descriptor of the pipeline shader. The renderer is then responsible for writing the appropriate data to the appropriate subpass pipeline shader (to prevent redundant writes and crashes due to missing input binding format since the shader might not declare or use the descriptor set)
 
 
 
@@ -26,6 +23,9 @@
 ### LOW PRIORITY
 [x] Solve the global store problem in rust. - Will be solved using plugins (like in nest.js)
 
+[] Modify the shader to take in the rotation axis and angle of rotation, translation and scale, then construct the model matrix in the shader itself.
+
+[] Modify the load_image function to return the format of the image along with the data, which could then be used to create images of appropriate format for the image data. (This could be used to load images other than 8bit channel format)
 
 
 # FUTURE GOALS

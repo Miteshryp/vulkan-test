@@ -32,12 +32,12 @@ use vulkano::{
     Version, VulkanError, VulkanLibrary,
 };
 
-use crate::graphics::pipelines::{
+use crate::graphics::{pipelines::{
     base_pipeline::GraphicsPipelineInterface,
     basic_pipeline,
     deferred_pipeline::{self, DeferredPipeline},
     lighting_pipeline::{self, LightingPipeline},
-};
+}, renderer::deferred_renderer::DeferredRenderer};
 
 // type name for buffer allocator
 type GenericBufferAllocator =
@@ -57,12 +57,13 @@ pub struct RenderPassAttachments {
 pub struct RenderTargetInfo {
     // pub pipeline: Arc<GraphicsPipeline>,
     // pub lighting_pipeline: Arc<GraphicsPipeline>,
-    pub pipeline: DeferredPipeline,
-    pub lighting_pipeline: LightingPipeline,
-    // pub render_pass: Arc<RenderPass>,
-    pub fbos: Vec<Arc<Framebuffer>>,
-    pub attachments: RenderPassAttachments,
-    pub image_sampler: Arc<Sampler>,
+    // pub pipeline: DeferredPipeline,
+    // pub lighting_pipeline: LightingPipeline,
+    // // pub render_pass: Arc<RenderPass>,
+    // pub fbos: Vec<Arc<Framebuffer>>,
+    // pub attachments: RenderPassAttachments,
+    // pub image_sampler: Arc<Sampler>,
+    pub renderer: DeferredRenderer,
 }
 
 pub struct InstanceAllocators {
@@ -78,7 +79,8 @@ pub struct VulkanInstance {
     queue: Arc<Queue>,
     // device_queues: Vec<Arc<Queue>>,
     pub swapchain_info: VulkanSwapchainInfo,
-    pub render_target: RenderTargetInfo,
+    // pub render_target: RenderTargetInfo,
+    pub renderer: DeferredRenderer,
     pub allocators: InstanceAllocators,
 }
 
@@ -200,12 +202,14 @@ impl VulkanInstance {
             ),
         };
 
-        let render_target_info = VulkanInstance::create_render_target(
-            window.clone(),
-            logical_device.clone(),
-            &swapchain,
-            allocators.memory_allocator.clone(),
-        );
+        // let render_target_info = VulkanInstance::create_render_target(
+        //     window.clone(),
+        //     logical_device.clone(),
+        //     &swapchain,
+        //     allocators.memory_allocator.clone(),
+        // );
+
+        let renderer = DeferredRenderer::new(logical_device.clone(), window.clone(), &swapchain, allocators.memory_allocator.clone());
 
         VulkanInstance {
             logical: logical_device,
@@ -214,140 +218,143 @@ impl VulkanInstance {
             queue: queues_iterator.next().unwrap(),
             surface: surface,
             swapchain_info: swapchain,
-            render_target: render_target_info,
+            // render_target: render_target_info,
+            renderer,
             allocators: allocators,
         }
     }
 
-    pub fn create_render_target(
-        window: Arc<Window>,
-        device: Arc<Device>,
-        swapchain_info: &VulkanSwapchainInfo,
-        allocator: GenericBufferAllocator,
-    ) -> RenderTargetInfo {
+    // pub fn create_render_target(
+    //     window: Arc<Window>,
+    //     device: Arc<Device>,
+    //     swapchain_info: &VulkanSwapchainInfo,
+    //     allocator: GenericBufferAllocator,
+    // ) -> RenderTargetInfo {
         // let render_pass = VulkanInstance::create_basic_render_pass(device.clone(), swapchain_info); // defines the schema information required for configuring the output of shaders to the framebuffer
-        let render_pass = VulkanInstance::create_deferred_render_pass(device.clone(), swapchain_info);
+        // let render_pass = VulkanInstance::create_deferred_render_pass(device.clone(), swapchain_info);
 
         // Creating Attachment Buffers
-        let depth_image_view = ImageView::new_default(Image::new(
-            allocator.clone(),
-            ImageCreateInfo {
-                // image_type: vulkano::image::ImageType::Dim1d,
-                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
-                // stencil_usage: Some(ImageUsage::DEPTH_STENCIL_ATTACHMENT),
-                format: vulkano::format::Format::D16_UNORM,
-                extent: [window.inner_size().width, window.inner_size().height, 1],
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-                ..Default::default()
-            },
-        ).unwrap())
-        .unwrap();
+        // let depth_image_view = ImageView::new_default(Image::new(
+        //     allocator.clone(),
+        //     ImageCreateInfo {
+        //         // image_type: vulkano::image::ImageType::Dim1d,
+        //         usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
+        //         // stencil_usage: Some(ImageUsage::DEPTH_STENCIL_ATTACHMENT),
+        //         format: vulkano::format::Format::D16_UNORM,
+        //         extent: [window.inner_size().width, window.inner_size().height, 1],
+        //         ..Default::default()
+        //     },
+        //     AllocationCreateInfo {
+        //         memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+        //         ..Default::default()
+        //     },
+        // ).unwrap())
+        // .unwrap();
 
-        let normal_image_view = ImageView::new_default(Image::new(
-            allocator.clone(),
-            ImageCreateInfo {
-                usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
-                // stencil_usage: Some(ImageUsage::INPUT_ATTACHMENT),
-                extent: [window.inner_size().width, window.inner_size().height, 1],
-                format: Format::R16G16B16A16_SFLOAT,
-                // format: Format::R32G32B32A32_SFLOAT,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-                ..Default::default()
-            },
-        )
-        .unwrap()).unwrap();
+        // let normal_image_view = ImageView::new_default(Image::new(
+        //     allocator.clone(),
+        //     ImageCreateInfo {
+        //         usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
+        //         // stencil_usage: Some(ImageUsage::INPUT_ATTACHMENT),
+        //         extent: [window.inner_size().width, window.inner_size().height, 1],
+        //         format: Format::R16G16B16A16_SFLOAT,
+        //         // format: Format::R32G32B32A32_SFLOAT,
+        //         ..Default::default()
+        //     },
+        //     AllocationCreateInfo {
+        //         memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+        //         ..Default::default()
+        //     },
+        // )
+        // .unwrap()).unwrap();
 
-        let color_image_view = ImageView::new_default(Image::new(
-            allocator.clone(),
-            ImageCreateInfo {
-                usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
-                // stencil_usage: Some(ImageUsage::INPUT_ATTACHMENT),
-                extent: [window.inner_size().width, window.inner_size().height, 1],
-                format: Format::A2B10G10R10_UNORM_PACK32,
-                // format: Format::R32G32B32A32_SFLOAT,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-                ..Default::default()
-            },
-        )
-        .unwrap()).unwrap();
+        // let color_image_view = ImageView::new_default(Image::new(
+        //     allocator.clone(),
+        //     ImageCreateInfo {
+        //         usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
+        //         // stencil_usage: Some(ImageUsage::INPUT_ATTACHMENT),
+        //         extent: [window.inner_size().width, window.inner_size().height, 1],
+        //         format: Format::A2B10G10R10_UNORM_PACK32,
+        //         // format: Format::R32G32B32A32_SFLOAT,
+        //         ..Default::default()
+        //     },
+        //     AllocationCreateInfo {
+        //         memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+        //         ..Default::default()
+        //     },
+        // )
+        // .unwrap()).unwrap();
 
         // Create a framebuffer for each swapchain image
-        let fbos: Vec<Arc<Framebuffer>> = swapchain_info
-            .images
-            .iter()
-            .map(|img| {
-                // create_basic_framebuffer_object(
-                //     render_pass.clone(),
-                //     img.clone(),
-                //     depth_image.clone(),
-                // )
-                let fb_image_view = ImageView::new_default(img.clone()).unwrap();
+        // let fbos: Vec<Arc<Framebuffer>> = swapchain_info
+        //     .images
+        //     .iter()
+        //     .map(|img| {
+        //         // create_basic_framebuffer_object(
+        //         //     render_pass.clone(),
+        //         //     img.clone(),
+        //         //     depth_image.clone(),
+        //         // )
+        //         let fb_image_view = ImageView::new_default(img.clone()).unwrap();
                 
-                create_deferred_framebuffer_object(
-                    render_pass.clone(),
-                    // img.clone(),
-                    fb_image_view.clone(),
-                    depth_image_view.clone(),
-                    color_image_view.clone(),
-                    normal_image_view.clone(),
-                )
-            })
-            .collect();
+        //         create_deferred_framebuffer_object(
+        //             render_pass.clone(),
+        //             // img.clone(),
+        //             fb_image_view.clone(),
+        //             depth_image_view.clone(),
+        //             color_image_view.clone(),
+        //             normal_image_view.clone(),
+        //         )
+        //     })
+        //     .collect();
 
-        let sampler = Sampler::new(
-            device.clone(),
-            SamplerCreateInfo {
-                address_mode: [SamplerAddressMode::Repeat; 3],
-                min_filter: vulkano::image::sampler::Filter::Linear,
-                mag_filter: vulkano::image::sampler::Filter::Linear,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        // let sampler = Sampler::new(
+        //     device.clone(),
+        //     SamplerCreateInfo {
+        //         address_mode: [SamplerAddressMode::Repeat; 3],
+        //         min_filter: vulkano::image::sampler::Filter::Linear,
+        //         mag_filter: vulkano::image::sampler::Filter::Linear,
+        //         ..Default::default()
+        //     },
+        // )
+        // .unwrap();
 
-        let basic_pipeline = basic_pipeline::BasicPipeline::new(
-            window.clone(),
-            device.clone(),
-            render_pass.clone(),
-            0,
-        );
+        // let basic_pipeline = basic_pipeline::BasicPipeline::new(
+        //     window.clone(),
+        //     device.clone(),
+        //     render_pass.clone(),
+        //     0,
+        // );
 
-        let deferred_pipeline_object = deferred_pipeline::DeferredPipeline::new(
-            window.clone(),
-            device.clone(),
-            render_pass.clone(),
-            0,
-        );
+        // let deferred_pipeline_object = deferred_pipeline::DeferredPipeline::new(
+        //     window.clone(),
+        //     device.clone(),
+        //     render_pass.clone(),
+        //     0,
+        // );
 
-        let lighting_pipeline = lighting_pipeline::LightingPipeline::new(
-            window.clone(),
-            device.clone(),
-            render_pass.clone(),
-            1,
-        );
+        // let lighting_pipeline = lighting_pipeline::LightingPipeline::new(
+        //     window.clone(),
+        //     device.clone(),
+        //     render_pass.clone(),
+        //     1,
+        // );
 
-        RenderTargetInfo {
-            // pipeline: graphics_pipeline.pipeline,
-            pipeline: deferred_pipeline_object,
-            lighting_pipeline: lighting_pipeline,
-            image_sampler: sampler,
-            attachments: RenderPassAttachments {
-                color_image_view: color_image_view,
-                normal_image_view: normal_image_view,
-            },
-            // render_pass: render_pass,
-            fbos: fbos,
-        }
-    }
+        // RenderTargetInfo {
+        //     // pipeline: graphics_pipeline.pipeline,
+        //     // pipeline: deferred_pipeline_object,
+        //     // lighting_pipeline: lighting_pipeline,
+        //     // image_sampler: sampler,
+        //     // attachments: RenderPassAttachments {
+        //     //     color_image_view: color_image_view,
+        //     //     normal_image_view: normal_image_view,
+        //     // },
+        //     // // render_pass: render_pass,
+        //     // fbos: fbos,
+
+        //     renderer: DeferredRenderer::new(device.clone(), window.clone(), &swapchain_info, allocator)
+        // }
+    // }
 
     pub fn get_device_type(&self) -> PhysicalDeviceType {
         self.physical.properties().device_type

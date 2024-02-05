@@ -11,7 +11,7 @@ pub mod vs {
             #version 460
             
             layout(set = 0, binding = 0) uniform MvpMatrix {
-                mat4 model;
+                // mat4 model;
                 mat4 view;
                 mat4 projection;
             } mvp;
@@ -26,19 +26,24 @@ pub mod vs {
             layout(location = 4) in vec3 global_position;
             layout(location = 5) in float local_scale;
             layout(location = 6) in uint tex_index;
+            // layout(location = 7) in mat4 model;
+            // layout(location = 11) in float sample_field;
 
             layout(location = 0) out vec3 out_color;
             layout(location = 1) out vec2 out_textureMapping;
             layout(location = 2) out uint out_texture_index;
             layout(location = 3) out vec3 out_normal;
             
-            void main() {                
-                gl_Position = mvp.projection * mvp.view * mvp.model * vec4(position.xyz * local_scale + global_position, 1.0);
+            void main() {        
+                gl_Position = mvp.projection * mvp.view * vec4(position.xyz * local_scale + global_position, 1.0);
+                // gl_Position = mvp.projection * mvp.view * mvp.model * vec4(position.xyz * local_scale + global_position, 1.0);
+                // gl_Position = mvp.projection * mvp.view * model * vec4(position.xyz, 1.0);
                 
                 out_color = color;
                 out_textureMapping = tex_coord;
                 out_texture_index = tex_index;
-                out_normal = mat3(mvp.model) * normal;
+                // out_normal = mat3(mvp.model) * normal;
+                out_normal = normal;
             }
             ",
     );
@@ -70,6 +75,7 @@ pub mod fs {
             
             void main() {            
                 f_color = texture(sampler2DArray(tex, s), vec3(tex_coord, tex_index));
+                // f_color = vec4(1.0,0,1.0,1.0);
                 f_normal = in_normal;
             }
         ",

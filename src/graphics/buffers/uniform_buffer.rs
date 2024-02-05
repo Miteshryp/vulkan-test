@@ -2,7 +2,7 @@ use std::{fmt::Write, sync::Arc};
 use vulkano::{
     buffer::{BufferContents, BufferUsage},
     descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, persistent, DescriptorSet,
+        allocator::StandardDescriptorSetAllocator, DescriptorSet,
         PersistentDescriptorSet, WriteDescriptorSet,
     },
     device::Device,
@@ -14,31 +14,20 @@ use crate::graphics::buffers::base_buffer::*;
 
 use super::primitives::GenericBufferAllocator;
 
-// INFO: New uniform buffer structure
+// INFO: New (ordered) uniform buffer structure
 // Step 1: UniformSet is a cover struct which will store all uniform buffers with the same set index
 // Step 2: Each buffer in a single uniform set will have a different binding index (based on order of submission)
 // Step 3: This UniformSet can then be compiled to produce a single persistent descriptor set
 // Step 4: This persistent descriptor set can then be passed into a single bind_descriptor_set call
 
-// UniformSet Class represents a persistent descriptor set
-// entry into a graphics pipeline
-//
-// METHODS:
-// 1. new:
-//      Creates a new UniformSet object
-// 2. add_uniform_buffer:
-//      This method constructs a uniform buffer and adds
-//      it to the uniform set as a registered write operation.
-//      The binding index of the uniform is automatically asigned
-//      based on the order that the uniforms are added.
-//      NOTE: The function does not bind the buffer to the
-//          desrciptor set
-//
-// 3. get_persistent_descriptor_set:
-//      This method is used to bind all the added buffers to the
-//      descriptor set with the descriptor set and returns the
-//      PersistentDescriptorSet object which can be passed into
-//      a command buffer build
+/*
+UniformSet Class represents a persistent descriptor set
+entry into a graphics pipeline
+
+METHODS:
+
+*/
+
 
 #[derive(Clone)]
 pub struct UniformSet {
@@ -46,9 +35,10 @@ pub struct UniformSet {
     pub uniforms: Vec<UniformBuffer>,
 }
 
+
+// TODO: Seperate the UniformSet into 2 types: 
+// Ordered (binding is incremental) vs Unordered (binding is custom)
 impl UniformSet {
-    // TODO: Put in a check to see if the descriptor index is in the
-    //      range allowed by the physical device
     pub fn new(descriptor_set_index: usize) -> Self {
         UniformSet {
             descriptor_set_index: descriptor_set_index,
@@ -85,7 +75,7 @@ impl UniformSet {
         return descriptor;
     }
 
-    pub fn get_dynamic_descriptor_set() {}
+    // pub fn get_dynamic_descriptor_set() {}
 
     // Creates a new uniform buffer and attaches it to the uniform set
     pub fn add_ordered_uniform_buffer<T>(
@@ -96,7 +86,7 @@ impl UniformSet {
     ) where
         T: BufferContents,
     {
-        let mut uniform_buffer = UniformBuffer::create(
+        let mut uniform_buffer = UniformBuffer::create_buffer(
             buffer_allocator,
             // self.binded_uniforms,
             self.uniforms.len() as u32,
@@ -130,7 +120,7 @@ impl UniformBuffer {
             descriptor_set: WriteDescriptorSet::sampler(binding_index, sampler)
         }
     }
-    pub fn create_immutable_sampler(binding_index: u32, sampler: Arc<Sampler>) -> Self {
+    pub fn create_immutable_sampler(binding_index: u32) -> Self {
         Self {
             descriptor_set: WriteDescriptorSet::none(binding_index)
         }
@@ -148,7 +138,7 @@ impl UniformBuffer {
         }
     }
 
-    pub fn create<T>(
+    pub fn create_buffer<T>(
         buffer_allocator: GenericBufferAllocator,
         binding_index: u32,
         data: T,
@@ -162,7 +152,8 @@ impl UniformBuffer {
             buffer_allocator.clone(),
             data,
             BufferUsage::UNIFORM_BUFFER,
-            options.memory_type_filter,
+            // options.memory_type_filter,
+            MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
         );
 
         // Writing the buffer to a specific binding
@@ -178,4 +169,12 @@ impl UniformBuffer {
     pub fn get_write_descriptor(self) -> WriteDescriptorSet {
         self.descriptor_set
     }
+}
+
+
+
+pub trait UniformResource {
+    fn get_uniform_buffer() -> UniformBuffer;
+    // fn get_uniform_buffer() -> Option<UniformBuffer>;
+    // fn get_uniform_set() -> Option<UniformSet>;
 }

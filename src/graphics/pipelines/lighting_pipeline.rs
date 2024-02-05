@@ -76,10 +76,6 @@ impl LightingPipeline {
         // Push Descriptor set binding
         let push_descriptor_set_layout = &mut descriptor_set_layout.set_layouts[push_descriptor_set_index as usize];
         push_descriptor_set_layout.flags |= DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR;
-        
-        // Attachments Descriptor set
-        // let attachment_descriptor_set_layout = &mut descriptor_set_layout.set_layouts[attachment_descriptor_set_index.unwrap() as usize];
-        // attachment_descriptor_set_layout.flags |= DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR;
 
 
         let descriptor_create_info = descriptor_set_layout.into_pipeline_layout_create_info(logical.clone()).unwrap();

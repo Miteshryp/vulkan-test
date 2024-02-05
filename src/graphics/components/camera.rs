@@ -1,18 +1,8 @@
-use std::sync::Arc;
+use std::{ops::{Deref, DerefMut}, sync::Arc};
 
 use nalgebra_glm as glm;
-use vulkano::descriptor_set::PersistentDescriptorSet;
 
-// use crate::graphics_pack::buffers::UniformSet;
-
-// TODO: Camera manager is required if I just store the parameters of the
-// projection matrix in the camera struct.
-// Storing the entire matrix in the struct can be pointless since we only
-// use the parameters once to create the matrix, and once the descriptor set
-// uniform for the projection matrix has been created, there is no use of the
-// matrix untill the projection parameters change, which is rare, so the RAM
-// memory is being wasted.
-
+#[derive(Clone)]
 pub struct Camera {
 
     // view components:
@@ -29,9 +19,6 @@ pub struct Camera {
     aspect_ratio: f32,
     near_z: f32,
     far_z: f32,
-
-    // The projection descriptor set.
-    // projection_descriptor: Option<Arc<PersistentDescriptorSet>>,
 }
 
 impl Camera {
@@ -112,7 +99,7 @@ impl Camera {
     // pub fn set_translate(&mut self, position: glm::Vec3) {
     // }
 
-    pub fn get_view_matrix_data(&mut self) -> glm::TMat4<f32> {
+    pub fn get_view_matrix_data(&self) -> glm::TMat4<f32> {
 
         let look_at_vec = self.position + self.camera_front;
 

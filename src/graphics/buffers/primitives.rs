@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use nalgebra_glm as glm;
 use vulkano::{buffer::BufferContents, command_buffer::{allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, PrimaryAutoCommandBuffer}, descriptor_set::allocator::StandardDescriptorSetAllocator, memory::allocator::GenericMemoryAllocator, pipeline::graphics::vertex_input::Vertex};
 
 
@@ -48,6 +49,8 @@ pub struct InstanceData {
     #[format(R32_UINT)]
     pub tex_index: u32,
 
+    // #[format(R32G32B32A32_SFLOAT)]
+    // pub model: [[f32; 4]; 4],
 }
 
 #[derive(BufferContents, Clone, Debug)]
