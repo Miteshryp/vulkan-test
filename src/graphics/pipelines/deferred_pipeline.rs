@@ -51,7 +51,6 @@ impl DeferredPipeline {
         window: Arc<Window>,
         logical_device: Arc<Device>,
         render_pass: Arc<RenderPass>,
-        // swapchain_info: &VulkanSwapchainInfo,
         subpass_index: u32,
     ) -> DeferredPipeline {
         let push_descriptor_set_index = 0;
@@ -127,6 +126,7 @@ impl DeferredPipeline {
         let depth_stencil = depth_stencil::DepthState::simple();
         // let rasterization_state_info: RasterizationState = ;
 
+        println!("Width: {}, Height: {}", window.inner_size().width, window.inner_size().height);
         GraphicsPipeline::new(
             logical_device,
             None,

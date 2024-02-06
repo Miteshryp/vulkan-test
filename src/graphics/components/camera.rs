@@ -110,6 +110,10 @@ impl Camera {
         )
     }
 
+    pub fn update_aspect_ratio(&mut self, width: u32, height: u32) {
+        self.aspect_ratio = (width as f32) / height as f32;
+    }
+
     pub fn get_projection_matrix_data(&self) -> glm::TMat4<f32> {
         glm::perspective(self.aspect_ratio, self.fov, self.near_z, self.far_z)
     }

@@ -28,6 +28,12 @@ impl KeyboardInputHandler {
         }
     }
 
+    // Clears all entries in the hashset
+    // This function is useful if any event missed during window resize causes incorrect behavior
+    pub fn reset_inputs(&mut self) {
+        self.pressed_keys.clear();
+    }
+
     pub fn is_pressed(&self, key_code: KeyCode) -> bool {
         match self.pressed_keys.get(&PhysicalKey::Code(key_code)) {
             Some(is_pressed) => is_pressed.to_owned(),

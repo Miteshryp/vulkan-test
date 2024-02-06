@@ -126,20 +126,22 @@ where
     }
 
     pub fn create_host_buffer(self, allocator: GenericBufferAllocator, usage: BufferUsage) -> Subbuffer<[T]> {
-        Buffer::from_iter(
+        let buffer = Buffer::from_iter(
             allocator,
             BufferCreateInfo {
                 usage: BufferUsage::TRANSFER_SRC | usage,
                 ..Default::default()
             },
             AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_HOST
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                memory_type_filter: MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
             self.buffer.into_iter(),
         )
-        .unwrap()
+        .unwrap();
+
+
+        return buffer
     }
 
 
@@ -182,6 +184,9 @@ where
             },
             buffer_size as u64
         ).unwrap();
+
+        println!("Host Buffer bytes size: {}", host_buffer.size());
+        println!("Device Buffer bytes size: {}", device_buffer.size());
 
         return (host_buffer, device_buffer);
         

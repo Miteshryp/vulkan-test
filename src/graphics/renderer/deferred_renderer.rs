@@ -227,6 +227,8 @@ impl DeferredRenderer {
         queue_family_index: u32,
         data: DeferredRendererData,
     ) -> Vec<primitives::CommandBufferType> {
+        // println!("Instance Count: {}", self.instance_buffer.clone().unwrap().count);
+
         self.frame_buffers
             .iter()
             .map(|fb| {
@@ -275,6 +277,21 @@ impl DeferredRenderer {
         swapchain_info: &VulkanSwapchainInfo,
         buffer_allocator: GenericBufferAllocator,
     ) {
+        self.render_pass = Self::create_render_pass(device.clone(), swapchain_info);
+        self.deferred_pipeline = DeferredPipeline::new(
+            window.clone(),
+            device.clone(),
+            self.render_pass.clone(),
+            0
+        );
+
+        self.lighting_pipeline = LightingPipeline::new(
+            window.clone(),
+            device.clone(),
+            self.render_pass.clone(),
+            1
+        );
+
         self.render_pass = Self::create_render_pass(device, swapchain_info);
         self.attachments = Self::get_attachment_image_views(window.clone(), buffer_allocator.clone());
         self.frame_buffers = Self::create_framebuffer( self.render_pass.clone(), &self.attachments, swapchain_info);

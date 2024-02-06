@@ -31,16 +31,12 @@ use vulkano::{
     Validated, VulkanError,
 };
 use winit::{
-    event::{
+    dpi::LogicalSize, event::{
         DeviceEvent, ElementState, Event, KeyEvent, Modifiers, MouseButton, MouseScrollDelta,
         RawKeyEvent, WindowEvent,
-    },
-    event_loop::{
+    }, event_loop::{
         self, ControlFlow, DeviceEvents, EventLoop, EventLoopBuilder, EventLoopWindowTarget,
-    },
-    keyboard::{Key, KeyCode, ModifiersState, PhysicalKey},
-    platform::{modifier_supplement::KeyEventExtModifierSupplement, x11::EventLoopBuilderExtX11},
-    window::{Window, WindowBuilder},
+    }, keyboard::{Key, KeyCode, ModifiersState, PhysicalKey}, platform::{modifier_supplement::KeyEventExtModifierSupplement, x11::EventLoopBuilderExtX11}, window::{Window, WindowBuilder}
 };
 
 
@@ -97,19 +93,19 @@ fn winit_handle_window_events(
 
 
 
-fn update_camera_position(camera: &mut Camera, input_handler: &KeyboardInputHandler) {
+fn update_camera_position(camera: &mut Camera, input_handler: &KeyboardInputHandler, delta_time: f32) {
     unsafe {
         if (input_handler.is_pressed(KeyCode::KeyW)) {
-            camera.move_forward(MOVE_SPEED);
+            camera.move_forward(MOVE_SPEED * delta_time);
         }
         if (input_handler.is_pressed(KeyCode::KeyS)) {
-            camera.move_backward(MOVE_SPEED);
+            camera.move_backward(MOVE_SPEED * delta_time);
         }
         if (input_handler.is_pressed(KeyCode::KeyA)) {
-            camera.move_left(MOVE_SPEED);
+            camera.move_left(MOVE_SPEED * delta_time);
         }
         if (input_handler.is_pressed(KeyCode::KeyD)) {
-            camera.move_right(MOVE_SPEED);
+            camera.move_right(MOVE_SPEED * delta_time);
         }
     }
 }
@@ -132,6 +128,10 @@ fn create_window() -> (Arc<Window>, EventLoop<()>) {
     let mut winit_event_loop: EventLoop<()> = winit_event_loop.unwrap();
     let winit_window: Arc<Window> = Arc::new(
         WindowBuilder::new()
+            .with_inner_size(LogicalSize {
+                width: 880,
+                height: 884
+            })
             // .with_transparent(true)
             .build(&winit_event_loop)
             .unwrap(),
@@ -399,12 +399,19 @@ fn create_data() -> (Vec<VertexData>, Vec<u32>, Vec<InstanceData>) {
 }
 
 fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance: VulkanInstance) {
+    let mut timer = std::time::Instant::now();
+    
+    let mut frame_render_time: f32 = timer.elapsed().as_millis() as f32;
+    let mut delta_time: f32 = 0 as f32;
+    let mut frame_rate: f32 = 0 as f32;
+
+    let target_fps: u32= 60;
+
+
     let mut keyboard_handler = KeyboardInputHandler::new();
 
     let mut window_resized = false;
     let mut recreate_swapchain = false;
-
-    let (vertices, indicies, instance_buffer_vec) = create_data();
 
     let mut camera = Camera::new(
         glm::vec3(0.0, 0.0, 0.0),
@@ -458,9 +465,9 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             device_id,
             event: DeviceEvent::MouseMotion { delta },
         } => {
-            let sen_x = 0.5;
-            let sen_y = 0.3;
-            camera.rotate(delta.0 as f32 * sen_x, delta.1 as f32 * sen_y);
+            let sen_x = 0.5 * delta_time;
+            let sen_y = 0.3 * delta_time;
+            camera.rotate(delta.0 as f32 * sen_x , delta.1 as f32 * sen_y);
             // println!("Mouse moved: {:?}", delta);
             // Rotate the mouse based on this (delta / sensitivity_factor)
         }
@@ -470,8 +477,16 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             ..
         } => {
             // draw call
+            let target_fps_frame_time = (1000.0 / target_fps as f32);
+            frame_render_time = timer.elapsed().as_millis() as f32;
+            timer = std::time::Instant::now();
+            frame_rate = (1000.0 / frame_render_time as f64) as f32;
+            
+            delta_time = frame_render_time / target_fps_frame_time;
+            // println!("RT: {frame_render_time} DT: {delta_time}");
+            // println!("FrameRate: {frame_rate}");
 
-            update_camera_position(&mut camera, &keyboard_handler);
+            update_camera_position(&mut camera, &keyboard_handler, delta_time);
 
             if window_resized || recreate_swapchain {
                 // recreating swapchains
@@ -479,20 +494,19 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
                 // refreshing the renderer
                 instance.renderer.refresh_render_target(instance.get_logical_device(), window.clone(), &instance.swapchain_info, instance.allocators.memory_allocator.clone());
+                camera.update_aspect_ratio(window.inner_size().width, window.inner_size().height);
+                keyboard_handler.reset_inputs();
 
                 window_resized = false;
                 recreate_swapchain = false;
             }
 
+            let (vertices, indicies, instance_buffer_vec) = create_data();
 
-            let model = glm::identity::<f32, 4>();
-            let view = camera.get_view_matrix_data();
-            let projection = camera.get_projection_matrix_data();
 
-            let mut mvp_data = shaders::deferred::vs::MvpMatrix {
-                view: Into::<[[f32; 4]; 4]>::into(view),
-                projection: Into::<[[f32; 4]; 4]>::into(projection),
-            };
+            // let model = glm::identity::<f32, 4>();
+            // let view = camera.get_view_matrix_data();
+            // let projection = camera.get_projection_matrix_data();
 
 
 
@@ -500,6 +514,8 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             let mut instance_staging_buffer = StagingBuffer::from_vec_ref(&instance_buffer_vec);
             let mut index_staging_buffer = StagingBuffer::from_vec_ref(&indicies);
 
+
+            // println!("{}", vertex_staging_buffer.byte_size());
 
             // Uploading buffer
             let mut buffer_uploader = BufferUploader::new(
@@ -509,10 +525,15 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             );
 
             // Getting final device buffers
+            println!("Vertex buffer: ");
             let device_vertex_buffer =
                 buffer_uploader.insert_buffer(vertex_staging_buffer, BufferUsage::VERTEX_BUFFER);
+
+            println!("Instance buffer: ");
             let device_instance_buffer =
                 buffer_uploader.insert_buffer(instance_staging_buffer, BufferUsage::VERTEX_BUFFER);
+
+            println!("Index buffer: ");
             let device_index_buffer =
                 buffer_uploader.insert_buffer(index_staging_buffer, BufferUsage::INDEX_BUFFER);
 

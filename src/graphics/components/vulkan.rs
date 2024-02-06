@@ -19,7 +19,7 @@ use vulkano::{
         view::ImageView,
         Image, ImageCreateInfo, ImageType, ImageUsage,
     },
-    instance::InstanceCreateInfo,
+    instance::{Instance, InstanceCreateInfo},
     memory::{
         allocator::{
             AllocationCreateInfo, GenericMemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
@@ -77,6 +77,7 @@ pub struct VulkanInstance {
     physical: Arc<vulkano::device::physical::PhysicalDevice>,
     surface: Arc<Surface>,
     queue: Arc<Queue>,
+    instance: Arc<Instance>,
     // device_queues: Vec<Arc<Queue>>,
     pub swapchain_info: VulkanSwapchainInfo,
     // pub render_target: RenderTargetInfo,
@@ -218,6 +219,7 @@ impl VulkanInstance {
             queue: queues_iterator.next().unwrap(),
             surface: surface,
             swapchain_info: swapchain,
+            instance: vulkan_instance,
             // render_target: render_target_info,
             renderer,
             allocators: allocators,
@@ -383,6 +385,9 @@ impl VulkanInstance {
 
     pub fn refresh_instance_swapchain(&mut self, window: Arc<Window>) {
         let dimensions = window.inner_size().into();
+        
+        self.surface = Surface::from_window(self.instance.clone(), window.clone()).unwrap();
+
         let (new_swapchain, new_images) = self
             .swapchain_info
             .swapchain
@@ -399,6 +404,15 @@ impl VulkanInstance {
     // creates a general buffer allocator
     fn create_buffer_allocator(device: Arc<Device>) -> GenericBufferAllocator {
         // We create memory allocator as an Arc because the Buffer::from_iter takes the allocator as an Arc copy
+        // StandardMemoryAllocator::new(device, vulkano::memory::allocator::GenericMemoryAllocatorCreateInfo { 
+        //     block_sizes: (),
+        //     memory_type_bits: (),
+        //     dedicated_allocation: (),
+        //     export_handle_types: (),
+        //     device_address: (),
+        //     _ne: () }
+        // );
+
         Arc::new(StandardMemoryAllocator::new_default(device))
     }
 

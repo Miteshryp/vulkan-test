@@ -19,6 +19,7 @@ pub trait GraphicsPipelineInterface {
     fn get_push_descriptor_set_index(&self) -> u32;
     fn get_attachment_descriptor_set_index(&self) -> Option<u32>;
     fn get_pipeline(&self) -> Arc<GraphicsPipeline>;
+    // fn refresh_pipeline(&mut self);
     // fn set_push_descriptor_set_index(&mut self);
 }
 
