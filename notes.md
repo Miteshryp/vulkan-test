@@ -107,6 +107,10 @@ but rather is given as an input into another render pass to get a
 new buffer output, which could then be used to render onto the screen 
 or can be given as an input in another render pass.
 
+To process a renderpass in a deferred manner, we must focus on the following components of the renderer:
+    - Renderpass and its attachments
+    - Subpass inputs, colors and 
+
 
 Overview model:
 

@@ -77,6 +77,8 @@ pub struct DeferredRenderer {
     vertex_buffer: Option<DeviceBuffer<VertexData>>,
     instance_buffer: Option<DeviceBuffer<InstanceData>>,
     index_buffer: Option<DeviceBuffer<u32>>,
+
+    instance_count: u32
 }
 
 // Things we need for a renderer
@@ -196,6 +198,7 @@ impl DeferredRenderer {
             vertex_buffer: None,
             instance_buffer: None,
             index_buffer: None,
+            instance_count: 0,
 
             attachments,
             internal_data: DeferredRendererDescriptorData {
@@ -212,6 +215,7 @@ impl DeferredRenderer {
     }
 
     pub fn bind_instance_buffer(&mut self, buffer: DeviceBuffer<InstanceData>) {
+        self.instance_count = buffer.count;
         let _ = std::mem::replace(&mut self.instance_buffer, Some(buffer));
     }
 
@@ -227,7 +231,6 @@ impl DeferredRenderer {
         queue_family_index: u32,
         data: DeferredRendererData,
     ) -> Vec<primitives::CommandBufferType> {
-        // println!("Instance Count: {}", self.instance_buffer.clone().unwrap().count);
 
         self.frame_buffers
             .iter()
@@ -277,7 +280,7 @@ impl DeferredRenderer {
         swapchain_info: &VulkanSwapchainInfo,
         buffer_allocator: GenericBufferAllocator,
     ) {
-        self.render_pass = Self::create_render_pass(device.clone(), swapchain_info);
+        // self.render_pass = Self::create_render_pass(device.clone(), swapchain_info);
         self.deferred_pipeline = DeferredPipeline::new(
             window.clone(),
             device.clone(),
@@ -593,7 +596,9 @@ impl DeferredRenderer {
         builder
             .draw_indexed(
                 self.index_buffer.clone().unwrap().count,
-                self.index_buffer.clone().unwrap().count / render_primitive_index_count,
+                // self.index_buffer.clone().unwrap().count / render_primitive_index_count,
+                // 1,
+                self.instance_count,
                 0,
                 0,
                 0,

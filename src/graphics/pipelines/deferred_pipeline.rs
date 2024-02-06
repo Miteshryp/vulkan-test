@@ -7,7 +7,7 @@ use vulkano::{
         graphics::{
             self,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
-            depth_stencil::{self, DepthStencilState},
+            depth_stencil::{self, DepthState, DepthStencilState, StencilOpState, StencilState},
             input_assembly::InputAssemblyState,
             rasterization::{FrontFace, RasterizationState},
             vertex_input::{Vertex, VertexBufferDescription, VertexDefinition},
@@ -124,9 +124,9 @@ impl DeferredPipeline {
             PipelineLayout::new(logical_device.clone(), descriptor_create_info).unwrap();
 
         let depth_stencil = depth_stencil::DepthState::simple();
+        // let depth_stencil = DepthState::default();
         // let rasterization_state_info: RasterizationState = ;
 
-        println!("Width: {}, Height: {}", window.inner_size().width, window.inner_size().height);
         GraphicsPipeline::new(
             logical_device,
             None,
@@ -160,6 +160,7 @@ impl DeferredPipeline {
                     depth: Some(depth_stencil),
                     ..Default::default()
                 }),
+                
 
                 // rasterization_state: Some(Default::default()),
                 rasterization_state: Some(RasterizationState {

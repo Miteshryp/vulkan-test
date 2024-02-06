@@ -9,7 +9,8 @@
 
 [] Document learnings from Deferred rendering solution in the notes.md file
 
-[] Fix the resizing bug
+[x] Fix the resizing bug
+
 [] Explore interfacing common renderer functions
 [] Create a input manager class, which could have callbacks attached to each input
 [] Learn how to implement a cubemap

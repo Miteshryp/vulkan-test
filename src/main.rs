@@ -16,19 +16,13 @@ use graphics::{
         camera::{self, Camera},
         input_handler::KeyboardInputHandler,
         uploader::BufferUploader,
-        vulkan::{VulkanInstance, },
+        vulkan::{VulkanInstance},
     }, renderer::deferred_renderer::{DeferredRendererData}, shaders::{self}
 };
 
 use std::{env, io::Read, process::exit, sync::Arc, time::SystemTime};
 use vulkano::{
-    buffer::{BufferUsage},
-    command_buffer::{
-        PrimaryCommandBufferAbstract
-    },
-    swapchain::{self, SwapchainPresentInfo},
-    sync::{self, GpuFuture},
-    Validated, VulkanError,
+    buffer::BufferUsage, command_buffer::PrimaryCommandBufferAbstract, swapchain::{self, SwapchainPresentInfo}, sync::{self, GpuFuture}, Validated, VulkanError
 };
 use winit::{
     dpi::LogicalSize, event::{
@@ -128,10 +122,6 @@ fn create_window() -> (Arc<Window>, EventLoop<()>) {
     let mut winit_event_loop: EventLoop<()> = winit_event_loop.unwrap();
     let winit_window: Arc<Window> = Arc::new(
         WindowBuilder::new()
-            .with_inner_size(LogicalSize {
-                width: 880,
-                height: 884
-            })
             // .with_transparent(true)
             .build(&winit_event_loop)
             .unwrap(),
@@ -377,9 +367,6 @@ fn create_data() -> (Vec<VertexData>, Vec<u32>, Vec<InstanceData>) {
             },
             local_scale: 1.0,
             tex_index: 0,
-            // model: Into::<[[f32; 4]; 4]>::into(
-            //     glm::translate(&glm::identity::<f32, 4>(), &global_pos1)
-            // ),
         },
         InstanceData {
             global_position: Vec3 {
@@ -389,9 +376,6 @@ fn create_data() -> (Vec<VertexData>, Vec<u32>, Vec<InstanceData>) {
             },
             local_scale: 1.4,
             tex_index: 1,
-            // model: Into::<[[f32; 4]; 4]>::into(
-            //     glm::translate(&glm::identity::<f32, 4>(), &global_pos2)
-            // ),
         },
     ]);
 
@@ -410,8 +394,8 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
     let mut keyboard_handler = KeyboardInputHandler::new();
 
-    let mut window_resized = false;
-    let mut recreate_swapchain = false;
+    let mut window_resized: bool = false;
+    let mut recreate_swapchain: bool = false;
 
     let mut camera = Camera::new(
         glm::vec3(0.0, 0.0, 0.0),
@@ -467,9 +451,8 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
         } => {
             let sen_x = 0.5 * delta_time;
             let sen_y = 0.3 * delta_time;
+            
             camera.rotate(delta.0 as f32 * sen_x , delta.1 as f32 * sen_y);
-            // println!("Mouse moved: {:?}", delta);
-            // Rotate the mouse based on this (delta / sensitivity_factor)
         }
 
         Event::WindowEvent {
@@ -489,14 +472,17 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             update_camera_position(&mut camera, &keyboard_handler, delta_time);
 
             if window_resized || recreate_swapchain {
+
+                println!("Refreshing swapchain");
                 // recreating swapchains
-                instance.refresh_instance_swapchain(window.clone()); // refresh_instance_swapchain(window.clone(), &mut instance);
+                instance.refresh_instance_swapchain(window.clone());
 
                 // refreshing the renderer
                 instance.renderer.refresh_render_target(instance.get_logical_device(), window.clone(), &instance.swapchain_info, instance.allocators.memory_allocator.clone());
+                
                 camera.update_aspect_ratio(window.inner_size().width, window.inner_size().height);
                 keyboard_handler.reset_inputs();
-
+                
                 window_resized = false;
                 recreate_swapchain = false;
             }
@@ -525,17 +511,9 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             );
 
             // Getting final device buffers
-            println!("Vertex buffer: ");
-            let device_vertex_buffer =
-                buffer_uploader.insert_buffer(vertex_staging_buffer, BufferUsage::VERTEX_BUFFER);
-
-            println!("Instance buffer: ");
-            let device_instance_buffer =
-                buffer_uploader.insert_buffer(instance_staging_buffer, BufferUsage::VERTEX_BUFFER);
-
-            println!("Index buffer: ");
-            let device_index_buffer =
-                buffer_uploader.insert_buffer(index_staging_buffer, BufferUsage::INDEX_BUFFER);
+            let device_vertex_buffer = buffer_uploader.insert_buffer(vertex_staging_buffer, BufferUsage::VERTEX_BUFFER);
+            let device_instance_buffer = buffer_uploader.insert_buffer(instance_staging_buffer, BufferUsage::VERTEX_BUFFER);
+            let device_index_buffer = buffer_uploader.insert_buffer(index_staging_buffer, BufferUsage::INDEX_BUFFER);
 
             // Point in time where device buffers are populated
             let upload_future = buffer_uploader

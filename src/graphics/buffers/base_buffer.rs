@@ -185,8 +185,6 @@ where
             buffer_size as u64
         ).unwrap();
 
-        println!("Host Buffer bytes size: {}", host_buffer.size());
-        println!("Device Buffer bytes size: {}", device_buffer.size());
 
         return (host_buffer, device_buffer);
         
