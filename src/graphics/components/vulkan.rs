@@ -49,23 +49,19 @@ type PrimaryAutoCommandBuilderType = AutoCommandBufferBuilder<
     Arc<StandardCommandBufferAllocator>,
 >;
 
-pub struct RenderPassAttachments {
-    pub color_image_view: Arc<ImageView>,
-    pub normal_image_view: Arc<ImageView>,
-}
+// pub struct RenderTargetInfo {
+//     // pub pipeline: Arc<GraphicsPipeline>,
+//     // pub lighting_pipeline: Arc<GraphicsPipeline>,
+//     // pub pipeline: DeferredPipeline,
+//     // pub lighting_pipeline: LightingPipeline,
+//     // // pub render_pass: Arc<RenderPass>,
+//     // pub fbos: Vec<Arc<Framebuffer>>,
+//     // pub attachments: RenderPassAttachments,
+//     // pub image_sampler: Arc<Sampler>,
+//     pub renderer: DeferredRenderer,
+// }
 
-pub struct RenderTargetInfo {
-    // pub pipeline: Arc<GraphicsPipeline>,
-    // pub lighting_pipeline: Arc<GraphicsPipeline>,
-    // pub pipeline: DeferredPipeline,
-    // pub lighting_pipeline: LightingPipeline,
-    // // pub render_pass: Arc<RenderPass>,
-    // pub fbos: Vec<Arc<Framebuffer>>,
-    // pub attachments: RenderPassAttachments,
-    // pub image_sampler: Arc<Sampler>,
-    pub renderer: DeferredRenderer,
-}
-
+#[derive(Clone)]
 pub struct InstanceAllocators {
     pub command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     pub memory_allocator: GenericBufferAllocator,
@@ -85,6 +81,7 @@ pub struct VulkanInstance {
     pub allocators: InstanceAllocators,
 }
 
+#[derive(Clone)]
 pub struct VulkanSwapchainInfo {
     pub swapchain: Arc<Swapchain>,
     pub images: Vec<Arc<Image>>,

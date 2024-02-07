@@ -108,11 +108,41 @@ new buffer output, which could then be used to render onto the screen
 or can be given as an input in another render pass.
 
 To process a renderpass in a deferred manner, we must focus on the following components of the renderer:
-    - Renderpass and its attachments
-    - Subpass inputs, colors and 
+
+1. **Preparing the Renderpass**
+    - Define Renderpass, its attachments, and subpasses
+    - Connect Subpass inputs, colors and depth stencil to appropriate attachments
+    - Create the attachment buffers as Images, and create an access point through image views. The format for each attachment image must match the format defined for that attachment in the renderpass.
+    - Attach the attachment image view into the framebuffer object that we create. The attachment buffers are a part of the frame, and hence the output of the shaders might be written to one of these buffers (based on ```color``` field definition of the subpass in render pass definition).
+    ```
+    NOTE: In case of a single pass, we used to attach the image of the swapchain which was to be displayed to the window in this framebuffer. Now, for multiple passes, we have the ability to bind multiple buffers into the framebuffer object. This buffer is allocated for every frame that we render.
+    ```
+    - Define the input attachment for the subpass if the subpass uses the output of a previous subpass. Subpass can write output to attachments which can then be used by a following subpass by taking that attachment as an input. To define the inputs in the subpass, we define the order of attachments in the `input` field of the subpass definition.
 
 
-Overview model:
+
+2. **Prepare the Shaders for each Subpass**
+    - Write the shader with the required input. Note that the fragment shader must write the output to a defined attachment. The `layout` index of the fragment output variable is determined by the order attachments in the `color` field that we defined in the subpass definition while creating the renderpass.
+    - Define the descriptor set in which the attachment will be taken as an input. This descriptor set will be used to bind and supply the attachment buffers in the shader to be used. This attachment will contain the output from the previous subpass which are to be used in the current subpass shaders
+
+3. **Create the pipelines for each Subpass**
+    - Create a subpass object for the pipeline using the render pass and the index of the current subpass in the renderpass.
+    - Load the appropriate shader module. The input definitions in the shaders are important since they let us define push descriptors and contain descriptor set layouts required to create the pipeline.
+    - Define the `color_blend_state` field while creating the GraphicsPipeline since it is important to define the number of color attachments that the subpass is writing to.
+    - Define the `vertex_input_state` for the pipeline by taking the vertex input state definition from the vertex shader info
+    ```
+    NOTE: The vertex input state format has to be same for all the pipelines in a single subpass, since the fragment shader only runs for the fragments covered by the rasterizer, which covers the fragments only if they lie in the defined vertex bounds.
+    ```
+4. **Attach the Required buffer and attachments descriptor sets in Command Buffer**
+    - Set the clear values for attachments at the beginning of the render pass (The format for clear values depends on the format defined for the attachments while creating the renderpass and while creating the attachment images).
+    - Create a command buffer by binding the buffers in appropriate order (the vertex buffers must be in the format defined in `vertex_input_state` which we defined while creating the pipelines)
+    - Create descriptor sets to pass in the appropriate data into the shaders. The frame buffer attachment which are to be used be used in the fragment shader must also be attached in this step. 
+    - It is important to ensure that the attachment resources bound to the descriptor set are the same ones that were bound to the Framebuffer. Recreating the resources could lead to data being written to wrong buffers (buffers not known by the framebuffers, hence the next subpass will load data from the resource in the framebuffer, but since the last renderpass wrote to some other resource, the resource in the renderpass is still containing the clear value)
+    - Once all the attachments have been supplied to the shader in descriptor sets, we can render the render pass to get the desired results.
+
+
+
+### Overview model:
 
 - Subpass 1
     - Graphics pipeline functions

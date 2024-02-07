@@ -1,24 +1,26 @@
 
 # TODAY's GOALS
-[x] Multipass / Deffered rendering
-    - [x] Find a solution to image view binding requirement for attachment image buffers
 
-    - [x] Modularize the code by creating "Renderers"       
+[] Explore interfacing common renderer functions (Designing the API for the engine)
 
-    - [x] Find out why the formatting change is not working in render subpass attachments - Stupid mistake (I passed UINT instead of a UNORM)
 
-[] Document learnings from Deferred rendering solution in the notes.md file
+[x] Document learnings from Deferred rendering solution in the notes.md file
 
-[x] Fix the resizing bug
 
-[] Explore interfacing common renderer functions
 [] Create a input manager class, which could have callbacks attached to each input
 [] Learn how to implement a cubemap
 [] Model loading
 
 
+# OPTIMIZATIONS
+[] In flight frames
 
 
+
+# FUTURE GOALS
+[] Different types of lighting
+[] Indirect drawing
+[] Dynamic shader loading
 
 
 ### LOW PRIORITY
@@ -29,10 +31,6 @@
 [] Modify the load_image function to return the format of the image along with the data, which could then be used to create images of appropriate format for the image data. (This could be used to load images other than 8bit channel format)
 
 
-# FUTURE GOALS
-[] Different types of lighting
-[] Indirect drawing
-[] Dynamic shader loading
 
 
 

@@ -119,6 +119,7 @@ impl LightingPipeline {
                     ..Default::default()
                 }),
                 multisample_state: Some(MultisampleState::default()),
+                // color_blend_state: Some(ColorBlendState::default()),
                 color_blend_state: Some(ColorBlendState::with_attachment_states(
                     subpass.clone().num_color_attachments(),
                     ColorBlendAttachmentState::default(),

@@ -22,7 +22,7 @@ use graphics::{
 
 use std::{env, io::Read, process::exit, sync::Arc, time::SystemTime};
 use vulkano::{
-    buffer::BufferUsage, command_buffer::PrimaryCommandBufferAbstract, swapchain::{self, SwapchainPresentInfo}, sync::{self, GpuFuture}, Validated, VulkanError
+    buffer::BufferUsage, command_buffer::PrimaryCommandBufferAbstract, swapchain::{self, PresentFuture, SwapchainPresentInfo}, sync::{self, future::FenceSignalFuture, GpuFuture}, Validated, VulkanError
 };
 use winit::{
     dpi::LogicalSize, event::{
@@ -391,6 +391,13 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
     let target_fps: u32= 60;
 
+    // Fences
+    let swapchain_image_count = instance.swapchain_info.images.len();
+    // let mut fences: Vec<Option<Arc<FenceSignalFuture<_>>>> = vec![None; swapchain_image_count];
+    let mut fences: Vec<Option<Arc<FenceSignalFuture<PresentFuture<_>>>>> = vec![None; swapchain_image_count];
+    let mut prev_frame_index = 0;
+
+
 
     let mut keyboard_handler = KeyboardInputHandler::new();
 
@@ -466,79 +473,64 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             frame_rate = (1000.0 / frame_render_time as f64) as f32;
             
             delta_time = frame_render_time / target_fps_frame_time;
-            // println!("RT: {frame_render_time} DT: {delta_time}");
             // println!("FrameRate: {frame_rate}");
+            println!("Delta: {frame_render_time}");
 
             update_camera_position(&mut camera, &keyboard_handler, delta_time);
 
             if window_resized || recreate_swapchain {
 
-                println!("Refreshing swapchain");
                 // recreating swapchains
                 instance.refresh_instance_swapchain(window.clone());
-
-                // refreshing the renderer
                 instance.renderer.refresh_render_target(instance.get_logical_device(), window.clone(), &instance.swapchain_info, instance.allocators.memory_allocator.clone());
-                
-                camera.update_aspect_ratio(window.inner_size().width, window.inner_size().height);
-                keyboard_handler.reset_inputs();
+
+                if window_resized {                
+                    camera.update_aspect_ratio(window.inner_size().width, window.inner_size().height);
+                    keyboard_handler.reset_inputs();
+                }
                 
                 window_resized = false;
                 recreate_swapchain = false;
             }
 
+
+            // Data buffers
             let (vertices, indicies, instance_buffer_vec) = create_data();
-
-
-            // let model = glm::identity::<f32, 4>();
-            // let view = camera.get_view_matrix_data();
-            // let projection = camera.get_projection_matrix_data();
-
-
 
             let mut vertex_staging_buffer = StagingBuffer::from_vec_ref(&vertices);
             let mut instance_staging_buffer = StagingBuffer::from_vec_ref(&instance_buffer_vec);
             let mut index_staging_buffer = StagingBuffer::from_vec_ref(&indicies);
 
-
-            // println!("{}", vertex_staging_buffer.byte_size());
-
             // Uploading buffer
-            let mut buffer_uploader = BufferUploader::new(
-                instance.allocators.command_buffer_allocator.clone(),
-                instance.allocators.memory_allocator.clone(),
-                instance.get_first_queue().queue_family_index(),
-            );
+            // let mut buffer_uploader = BufferUploader::new(
+            //     instance.allocators.command_buffer_allocator.clone(),
+            //     instance.allocators.memory_allocator.clone(),
+            //     instance.get_first_queue().queue_family_index(),
+            // );
 
             // Getting final device buffers
-            let device_vertex_buffer = buffer_uploader.insert_buffer(vertex_staging_buffer, BufferUsage::VERTEX_BUFFER);
-            let device_instance_buffer = buffer_uploader.insert_buffer(instance_staging_buffer, BufferUsage::VERTEX_BUFFER);
-            let device_index_buffer = buffer_uploader.insert_buffer(index_staging_buffer, BufferUsage::INDEX_BUFFER);
+            // let device_vertex_buffer = buffer_uploader.insert_buffer(vertex_staging_buffer, BufferUsage::VERTEX_BUFFER);
+            // let device_instance_buffer = buffer_uploader.insert_buffer(instance_staging_buffer, BufferUsage::VERTEX_BUFFER);
+            // let device_index_buffer = buffer_uploader.insert_buffer(index_staging_buffer, BufferUsage::INDEX_BUFFER);
 
             // Point in time where device buffers are populated
-            let upload_future = buffer_uploader
-                .get_one_time_command_buffer()
-                .execute(instance.get_first_queue())
-                .unwrap();
+            // let upload_future = buffer_uploader
+            //     .get_one_time_command_buffer()
+            //     .execute(instance.get_first_queue())
+            //     .unwrap();
 
-            instance.renderer.bind_vertex_buffer(device_vertex_buffer);
-            instance.renderer.bind_instance_buffer(device_instance_buffer);
-            instance.renderer.bind_index_buffer(device_index_buffer);
+            // instance.renderer.bind_vertex_buffer(device_vertex_buffer);
+            // instance.renderer.bind_instance_buffer(device_instance_buffer);
+            // instance.renderer.bind_index_buffer(device_index_buffer);
+            instance.renderer.bind_vertex_buffer(vertex_staging_buffer);
+            instance.renderer.bind_instance_buffer(instance_staging_buffer);
+            instance.renderer.bind_index_buffer(index_staging_buffer);
 
-            let command_buffers = instance.renderer.render(
-                instance.allocators.command_buffer_allocator.clone(),
-                instance.allocators.memory_allocator.clone(),
-                instance.allocators.descriptor_set_allocator.clone(),
-                instance.get_first_queue().queue_family_index(),
-                DeferredRendererData {
-                    camera: &camera,
-                    image_array_view: image_view.clone()
-                }
-            );
+            
 
 
 
-            let (image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
+            let (frame_image_index, is_suboptimal, acquired_future) = match swapchain::acquire_next_image(
                 instance.swapchain_info.swapchain.clone(),
                 None,
             )
@@ -546,7 +538,7 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             {
                 Ok(r) => r,
                 Err(VulkanError::OutOfDate) => {
-                    recreate_swapchain = false;
+                    recreate_swapchain = true;
                     return;
                 }
                 Err(e) => panic!("Failed to acquire next image from swapchain: {e}"),
@@ -554,23 +546,50 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
 
             if is_suboptimal {
                 recreate_swapchain = true;
+                return;
             }
 
-            // Future is a point where GPU gets access to the data
 
-            let future = sync::now(instance.get_logical_device())
+            // The swapchain image is occupied. Wait untill the previous work finishes
+            if let Some(prev_frame) = &fences[frame_image_index as usize] {
+                prev_frame.wait(None).unwrap();
+            }
+
+            // Command buffer
+            let command_buffer = instance.renderer.render(
+                instance.allocators.command_buffer_allocator.clone(),
+                instance.allocators.memory_allocator.clone(),
+                instance.allocators.descriptor_set_allocator.clone(),
+                instance.get_first_queue().queue_family_index(),
+                frame_image_index,
+                DeferredRendererData {
+                    camera: &camera,
+                    image_array_view: image_view.clone()
+                }
+            );
+
+            let previous_frame_future = match fences[prev_frame_index].clone() {
+                Some(future) => future.boxed(),
+                None => sync::now(instance.get_logical_device()).boxed() ,
+            };
+
+            // Future is a point where GPU gets access to the data
+            // This is the call which waits, and this should only happen if necessary
+            // let future = sync::now(instance.get_logical_device())
+            let future = previous_frame_future
                 .join(acquired_future)
-                .join(upload_future)
+                // .join(upload_future)
                 .then_execute(
                     instance.get_first_queue(),
-                    command_buffers[image_index as usize].clone(),
+                    // command_buffers[image_index as usize].clone(),
+                    command_buffer
                 )
                 .unwrap()
                 .then_swapchain_present(
                     instance.get_first_queue(),
                     SwapchainPresentInfo::swapchain_image_index(
                         instance.get_swapchain(),
-                        image_index,
+                        frame_image_index,
                     ),
                 )
                 .then_signal_fence_and_flush();
@@ -578,7 +597,10 @@ fn start_window_event_loop(window: Arc<Window>, el: EventLoop<()>, mut instance:
             match future.map_err(Validated::unwrap) {
                 Ok(future) => {
                     // Wait for the GPU to finish.
-                    future.wait(None).unwrap();
+                    // future.wait(None).unwrap();
+                    // println!("{frame_image_index}");
+                    fences[frame_image_index as usize] = Some(Arc::new(future));
+                    prev_frame_index = frame_image_index as usize;
                 }
                 Err(VulkanError::OutOfDate) => {
                     recreate_swapchain = true;
