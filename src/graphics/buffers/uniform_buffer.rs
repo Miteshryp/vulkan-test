@@ -82,7 +82,6 @@ impl UniformSet {
         &mut self,
         buffer_allocator: GenericBufferAllocator,
         data: T,
-        options: BufferOptions,
     ) where
         T: BufferContents,
     {
@@ -90,8 +89,7 @@ impl UniformSet {
             buffer_allocator,
             // self.binded_uniforms,
             self.uniforms.len() as u32,
-            data,
-            options,
+            data
         );
 
         self.uniforms.push(uniform_buffer);
@@ -141,8 +139,7 @@ impl UniformBuffer {
     pub fn create_buffer<T>(
         buffer_allocator: GenericBufferAllocator,
         binding_index: u32,
-        data: T,
-        options: BufferOptions,
+        data: T
     ) -> Self
     where
         T: BufferContents,
@@ -169,12 +166,4 @@ impl UniformBuffer {
     pub fn get_write_descriptor(self) -> WriteDescriptorSet {
         self.descriptor_set
     }
-}
-
-
-
-pub trait UniformResource {
-    fn get_uniform_buffer() -> UniformBuffer;
-    // fn get_uniform_buffer() -> Option<UniformBuffer>;
-    // fn get_uniform_set() -> Option<UniformSet>;
 }

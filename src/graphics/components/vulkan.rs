@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{any::TypeId, cell::RefCell, sync::Arc};
 
 use winit::{event_loop::EventLoop, window::Window};
 
@@ -11,7 +11,7 @@ use vulkano::{
     descriptor_set::allocator::StandardDescriptorSetAllocator,
     device::{
         physical::{self, PhysicalDeviceType},
-        Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
+        Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo, QueueFlags,
     },
     format::Format,
     image::{
@@ -32,12 +32,15 @@ use vulkano::{
     Version, VulkanError, VulkanLibrary,
 };
 
-use crate::graphics::{pipelines::{
-    base_pipeline::GraphicsPipelineInterface,
-    basic_pipeline,
-    deferred_pipeline::{self, DeferredPipeline},
-    lighting_pipeline::{self, LightingPipeline},
-}, renderer::deferred_renderer::DeferredRenderer};
+use crate::graphics::{
+    pipelines::{
+        base_pipeline::GraphicsPipelineInterface,
+        basic_pipeline,
+        deferred_pipeline::{self, DeferredPipeline},
+        lighting_pipeline::{self, LightingPipeline},
+    },
+    renderer::{deferred_renderer::DeferredRenderer, VulkanRenderer},
+};
 
 // type name for buffer allocator
 type GenericBufferAllocator =
@@ -61,6 +64,17 @@ type PrimaryAutoCommandBuilderType = AutoCommandBufferBuilder<
 //     pub renderer: DeferredRenderer,
 // }
 
+
+
+/// Stores all universal allocators in a vulkan instance
+/// 
+/// The data in this struct is to be used by all graphics related purposes to 
+/// allocate host(CPU) or device(GPU) based memory through vulkan.
+/// 
+/// We do not allow creation of multiple buffer allocators to ensure efficiency
+/// and reduce memory usage.
+/// In the future, this struct may include multiple allocator for the same buffer
+/// with different configurations if the engine may require it. 
 #[derive(Clone)]
 pub struct InstanceAllocators {
     pub command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
@@ -68,24 +82,45 @@ pub struct InstanceAllocators {
     pub descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 }
 
-pub struct VulkanInstance {
-    logical: Arc<Device>,
-    physical: Arc<vulkano::device::physical::PhysicalDevice>,
-    surface: Arc<Surface>,
-    queue: Arc<Queue>,
-    instance: Arc<Instance>,
-    // device_queues: Vec<Arc<Queue>>,
+
+/// Stores all vulkan API based metadata required for calling vulkan based 
+/// API functions.
+/// 
+/// An instance of this struct is stored in the global vulkan instance,
+/// which is then responsible for passing it as plugins appropriately 
+pub struct VulkanTarget {
+    pub logical: Arc<Device>,
+    pub physical: Arc<vulkano::device::physical::PhysicalDevice>,
+    pub surface: Arc<Surface>,
+    pub queue: Arc<Queue>,
+    pub vulkan_instance: Arc<Instance>,
     pub swapchain_info: VulkanSwapchainInfo,
-    // pub render_target: RenderTargetInfo,
-    pub renderer: DeferredRenderer,
-    pub allocators: InstanceAllocators,
 }
 
+pub struct VulkanInstanceState {
+    
+    pub target: VulkanTarget,
+    // pub renderer: RefCell<DeferredRenderer>,
+    pub allocators: InstanceAllocators,
+
+    // pub renderers: 
+}
+
+
+/// Store swapchain specific metadata
 #[derive(Clone)]
 pub struct VulkanSwapchainInfo {
     pub swapchain: Arc<Swapchain>,
     pub images: Vec<Arc<Image>>,
 }
+
+
+
+
+// Some sort of instance builder? 
+// - How will this help resolve the issue we're having?
+// - How will this function
+
 
 // New Rendering system
 // 1. Push the data into a upload structure
@@ -93,13 +128,15 @@ pub struct VulkanSwapchainInfo {
 // 3. create a command buffer in the upload structure
 // 4. get the per frame upload command buffer future and wait before executing the rendering command buffer
 
-impl VulkanInstance {
-    pub fn initialise(window: Arc<Window>, el: &EventLoop<()>) -> Self {
-        // initialise_vulkan_runtime(window, eltw)
+impl VulkanInstanceState {
 
-        /*
-            Step 1. Select a Physical Device
-        */
+
+    /// Initialise the vulkan instance by getting initialising, allocating 
+    /// and securing window construct for the vulkan runtime.
+    /// 
+    /// The [`window`](Arc<Window>) is a handle to the winit window wrapped in an 
+    /// Arc, which can fetched from a window object.
+    pub fn initialise(window: Arc<Window>, el: &EventLoop<()>) -> Self {
 
         // Loading the vulkan plugins
         let vulkan_library = vulkano::VulkanLibrary::new()
@@ -128,17 +165,27 @@ impl VulkanInstance {
             .unwrap_or_else(|err| panic!("Could not create surface object: \n{:?}", err));
 
         // We need a device with swapchain extensions for graphics rendering
-        let device_extensions = DeviceExtensions {
+        let required_device_extensions = DeviceExtensions {
             khr_swapchain: true,
             khr_push_descriptor: true,
+            // khr_display_swapchain: true,
             // ext_debug_marker: true,
             ..Default::default()
+        };
+
+        // TODO: Explore the possible features
+        let requested_device_features = Features {
+            wide_lines: true,
+            ..vulkano::device::Features::empty()
         };
 
         let (physical_device, queue_family_index) = vulkan_instance
             .enumerate_physical_devices()
             .expect("Failed to enumerate physical devices")
-            .filter(|p| p.supported_extensions().contains(&device_extensions))
+            .filter(|p| {
+                p.supported_extensions()
+                    .contains(&required_device_extensions)
+            })
             .filter_map(|p| {
                 p.queue_family_properties()
                     .iter()
@@ -147,7 +194,11 @@ impl VulkanInstance {
                         // Checking for proper support of
                         // 1. Surface support for the created surface
                         // 2. Required Queue family availability
-                        q.queue_flags.intersects(QueueFlags::GRAPHICS)
+
+                        // Adding check for required graphics features
+                        p.supported_features()
+                            .intersects(&requested_device_features)
+                            && q.queue_flags.intersects(QueueFlags::GRAPHICS)
                             && p.surface_support(i as u32, &surface).unwrap_or(false)
                     })
                     .map(|queue_index| (p, queue_index))
@@ -166,9 +217,8 @@ impl VulkanInstance {
             physical_device.properties().device_name
         );
 
-        /*
-        Creating Logical Device
-        */
+
+        // Creating Logical Device
         let (logical_device, mut queues_iterator) = Device::new(
             physical_device.clone(),
             DeviceCreateInfo {
@@ -176,7 +226,8 @@ impl VulkanInstance {
                     queue_family_index: queue_family_index as u32,
                     ..Default::default()
                 }],
-                enabled_extensions: device_extensions,
+                enabled_extensions: required_device_extensions,
+                enabled_features: requested_device_features,
                 ..Default::default()
             },
         )
@@ -191,11 +242,11 @@ impl VulkanInstance {
         );
 
         let allocators = InstanceAllocators {
-            command_buffer_allocator: VulkanInstance::create_command_buffer_allocator(
+            command_buffer_allocator: VulkanInstanceState::create_command_buffer_allocator(
                 logical_device.clone(),
             ),
-            memory_allocator: VulkanInstance::create_buffer_allocator(logical_device.clone()),
-            descriptor_set_allocator: VulkanInstance::create_descriptor_set_allocator(
+            memory_allocator: VulkanInstanceState::create_buffer_allocator(logical_device.clone()),
+            descriptor_set_allocator: VulkanInstanceState::create_descriptor_set_allocator(
                 logical_device.clone(),
             ),
         };
@@ -207,208 +258,82 @@ impl VulkanInstance {
         //     allocators.memory_allocator.clone(),
         // );
 
-        let renderer = DeferredRenderer::new(logical_device.clone(), window.clone(), &swapchain, allocators.memory_allocator.clone());
+        // renderer has to be optional
+        // we create the renderer after creating the instance
 
-        VulkanInstance {
-            logical: logical_device,
-            physical: physical_device,
-            // device_queues: device_queues,
-            queue: queues_iterator.next().unwrap(),
-            surface: surface,
-            swapchain_info: swapchain,
-            instance: vulkan_instance,
-            // render_target: render_target_info,
-            renderer,
+        
+        let instance = VulkanInstanceState {
+
+            target: VulkanTarget {
+                logical: logical_device,
+                physical: physical_device,
+                surface,
+                swapchain_info: swapchain,
+                queue: queues_iterator.next().unwrap(),
+                vulkan_instance,
+            },
+            
+
+            // renderer: DeferredRenderer::new(
+            //     instance.logical.clone(),
+            //     window.clone(),
+            //     &instance
+            //     // &instance.swapchain_info,
+            //     // queue_family_index as u32,
+            //     // instance.allocators.command_buffer_allocator.clone(),
+            //     // instance.allocators.memory_allocator.clone(),
+            //     // instance.allbocators.descriptor_set_allocator.clone()
+            // ),
             allocators: allocators,
-        }
+        };
+
+        instance
     }
 
-    // pub fn create_render_target(
-    //     window: Arc<Window>,
-    //     device: Arc<Device>,
-    //     swapchain_info: &VulkanSwapchainInfo,
-    //     allocator: GenericBufferAllocator,
-    // ) -> RenderTargetInfo {
-        // let render_pass = VulkanInstance::create_basic_render_pass(device.clone(), swapchain_info); // defines the schema information required for configuring the output of shaders to the framebuffer
-        // let render_pass = VulkanInstance::create_deferred_render_pass(device.clone(), swapchain_info);
-
-        // Creating Attachment Buffers
-        // let depth_image_view = ImageView::new_default(Image::new(
-        //     allocator.clone(),
-        //     ImageCreateInfo {
-        //         // image_type: vulkano::image::ImageType::Dim1d,
-        //         usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
-        //         // stencil_usage: Some(ImageUsage::DEPTH_STENCIL_ATTACHMENT),
-        //         format: vulkano::format::Format::D16_UNORM,
-        //         extent: [window.inner_size().width, window.inner_size().height, 1],
-        //         ..Default::default()
-        //     },
-        //     AllocationCreateInfo {
-        //         memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-        //         ..Default::default()
-        //     },
-        // ).unwrap())
-        // .unwrap();
-
-        // let normal_image_view = ImageView::new_default(Image::new(
-        //     allocator.clone(),
-        //     ImageCreateInfo {
-        //         usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
-        //         // stencil_usage: Some(ImageUsage::INPUT_ATTACHMENT),
-        //         extent: [window.inner_size().width, window.inner_size().height, 1],
-        //         format: Format::R16G16B16A16_SFLOAT,
-        //         // format: Format::R32G32B32A32_SFLOAT,
-        //         ..Default::default()
-        //     },
-        //     AllocationCreateInfo {
-        //         memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-        //         ..Default::default()
-        //     },
-        // )
-        // .unwrap()).unwrap();
-
-        // let color_image_view = ImageView::new_default(Image::new(
-        //     allocator.clone(),
-        //     ImageCreateInfo {
-        //         usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
-        //         // stencil_usage: Some(ImageUsage::INPUT_ATTACHMENT),
-        //         extent: [window.inner_size().width, window.inner_size().height, 1],
-        //         format: Format::A2B10G10R10_UNORM_PACK32,
-        //         // format: Format::R32G32B32A32_SFLOAT,
-        //         ..Default::default()
-        //     },
-        //     AllocationCreateInfo {
-        //         memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-        //         ..Default::default()
-        //     },
-        // )
-        // .unwrap()).unwrap();
-
-        // Create a framebuffer for each swapchain image
-        // let fbos: Vec<Arc<Framebuffer>> = swapchain_info
-        //     .images
-        //     .iter()
-        //     .map(|img| {
-        //         // create_basic_framebuffer_object(
-        //         //     render_pass.clone(),
-        //         //     img.clone(),
-        //         //     depth_image.clone(),
-        //         // )
-        //         let fb_image_view = ImageView::new_default(img.clone()).unwrap();
-                
-        //         create_deferred_framebuffer_object(
-        //             render_pass.clone(),
-        //             // img.clone(),
-        //             fb_image_view.clone(),
-        //             depth_image_view.clone(),
-        //             color_image_view.clone(),
-        //             normal_image_view.clone(),
-        //         )
-        //     })
-        //     .collect();
-
-        // let sampler = Sampler::new(
-        //     device.clone(),
-        //     SamplerCreateInfo {
-        //         address_mode: [SamplerAddressMode::Repeat; 3],
-        //         min_filter: vulkano::image::sampler::Filter::Linear,
-        //         mag_filter: vulkano::image::sampler::Filter::Linear,
-        //         ..Default::default()
-        //     },
-        // )
-        // .unwrap();
-
-        // let basic_pipeline = basic_pipeline::BasicPipeline::new(
-        //     window.clone(),
-        //     device.clone(),
-        //     render_pass.clone(),
-        //     0,
-        // );
-
-        // let deferred_pipeline_object = deferred_pipeline::DeferredPipeline::new(
-        //     window.clone(),
-        //     device.clone(),
-        //     render_pass.clone(),
-        //     0,
-        // );
-
-        // let lighting_pipeline = lighting_pipeline::LightingPipeline::new(
-        //     window.clone(),
-        //     device.clone(),
-        //     render_pass.clone(),
-        //     1,
-        // );
-
-        // RenderTargetInfo {
-        //     // pipeline: graphics_pipeline.pipeline,
-        //     // pipeline: deferred_pipeline_object,
-        //     // lighting_pipeline: lighting_pipeline,
-        //     // image_sampler: sampler,
-        //     // attachments: RenderPassAttachments {
-        //     //     color_image_view: color_image_view,
-        //     //     normal_image_view: normal_image_view,
-        //     // },
-        //     // // render_pass: render_pass,
-        //     // fbos: fbos,
-
-        //     renderer: DeferredRenderer::new(device.clone(), window.clone(), &swapchain_info, allocator)
-        // }
+    // pub fn get_renderer<RendererType: VulkanRendererInterface>(&self) {
     // }
 
     pub fn get_device_type(&self) -> PhysicalDeviceType {
-        self.physical.properties().device_type
+        self.target.physical.properties().device_type
     }
 
     pub fn get_first_queue(&self) -> Arc<Queue> {
-        // self.device_queues.iter().next().unwrap().clone()
-        self.queue.clone()
+        self.target.queue.clone()
     }
 
     pub fn get_logical_device(&self) -> Arc<Device> {
-        self.logical.clone()
+        self.target.logical.clone()
     }
 
     pub fn get_physical_device(&self) -> Arc<physical::PhysicalDevice> {
-        self.physical.clone()
+        self.target.physical.clone()
     }
 
     pub fn get_swapchain(&self) -> Arc<Swapchain> {
-        self.swapchain_info.swapchain.clone()
+        self.target.swapchain_info.swapchain.clone()
     }
-
-    // pub fn get_graphics_pipeline(&self) -> Arc<GraphicsPipeline> {
-    //     self.render_target.pipeline.clone()
-    // }
 
     pub fn refresh_instance_swapchain(&mut self, window: Arc<Window>) {
         let dimensions = window.inner_size().into();
-        
-        self.surface = Surface::from_window(self.instance.clone(), window.clone()).unwrap();
 
-        let (new_swapchain, new_images) = self
+        self.target.surface = Surface::from_window(self.target.vulkan_instance.clone(), window.clone()).unwrap();
+
+        let (new_swapchain, new_images) = self.target
             .swapchain_info
             .swapchain
             .recreate(SwapchainCreateInfo {
                 image_extent: dimensions,
-                ..self.swapchain_info.swapchain.create_info()
+                ..self.target.swapchain_info.swapchain.create_info()
             })
             .unwrap();
 
-        self.swapchain_info.swapchain = new_swapchain;
-        self.swapchain_info.images = new_images;
+        self.target.swapchain_info.swapchain = new_swapchain;
+        self.target.swapchain_info.images = new_images;
     }
 
     // creates a general buffer allocator
     fn create_buffer_allocator(device: Arc<Device>) -> GenericBufferAllocator {
         // We create memory allocator as an Arc because the Buffer::from_iter takes the allocator as an Arc copy
-        // StandardMemoryAllocator::new(device, vulkano::memory::allocator::GenericMemoryAllocatorCreateInfo { 
-        //     block_sizes: (),
-        //     memory_type_bits: (),
-        //     dedicated_allocation: (),
-        //     export_handle_types: (),
-        //     device_address: (),
-        //     _ne: () }
-        // );
 
         Arc::new(StandardMemoryAllocator::new_default(device))
     }
@@ -576,7 +501,10 @@ fn create_swapchain(
         composite_alpha: composite_alpha,
         image_extent: window_dimensions.into(),
         image_format: image_format,
-
+        // present_mode: swapchain::PresentMode::Fifo,
+        // present_mode: swapchain::PresentMode::Immediate,
+        // present_mode: swapchain::PresentMode::Mailbox,
+        // present_mode: swapchain::PresentMode::FifoRelaxed,
         ..Default::default()
     };
 
@@ -601,11 +529,15 @@ fn create_deferred_framebuffer_object(
     color_view: Arc<ImageView>,
     normal_view: Arc<ImageView>,
 ) -> Arc<Framebuffer> {
-
     Framebuffer::new(
         render_pass.clone(),
         FramebufferCreateInfo {
-            attachments: vec![final_image_view, color_view, normal_view, depth_stencil_view],
+            attachments: vec![
+                final_image_view,
+                color_view,
+                normal_view,
+                depth_stencil_view,
+            ],
             ..Default::default()
         },
     )

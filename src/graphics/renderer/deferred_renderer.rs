@@ -36,7 +36,7 @@ use crate::graphics::{
     },
     components::{
         camera::Camera,
-        vulkan::{VulkanInstance, VulkanSwapchainInfo},
+        vulkan::{VulkanInstanceState, VulkanSwapchainInfo},
     },
     pipelines::{
         base_pipeline::GraphicsPipelineInterface, deferred_pipeline::DeferredPipeline,
@@ -45,7 +45,7 @@ use crate::graphics::{
     shaders,
 };
 
-use super::{RendererInterface, VulkanRenderpassBuilder};
+use super::{VulkanRenderer, VulkanRenderpassBuilder};
 use nalgebra_glm as glm;
 
 pub struct DeferredRendererData<'a> {
@@ -71,8 +71,22 @@ struct RenderTarget {
     frame_buffers: Vec<Arc<Framebuffer>>,
 }
 
+
 #[derive(Clone)]
-enum Test<T>
+struct DeferredRendererStore {
+    command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    memory_allocator: GenericBufferAllocator, 
+    descriptor_set_allocator: primitives::DescriptorSetAllocator,
+
+    // swapchain: &'a VulkanSwapchainInfo,
+    swapchain: *const VulkanSwapchainInfo,
+
+    queue_family_index: u32,
+    framebuffer_index: u32,
+}
+
+#[derive(Clone)]
+enum VulkanBuffer<T>
 where
     T: BufferContents + Clone,
 {
@@ -87,20 +101,18 @@ pub struct DeferredRenderer {
     deferred_pipeline: DeferredPipeline,
     lighting_pipeline: LightingPipeline,
 
+    // store: DeferredRendererStore,
+    // instance: *const VulkanInstanceState,
+
     // Attachments
     attachments: Vec<DeferredRendererAttachments>,
     internal_data: DeferredRendererDescriptorData,
     frame_buffers: Vec<Arc<Framebuffer>>,
 
-    // builder: Arc<primitives::PrimaryAutoCommandBuilderType>,
-
     // Buffers
-    // vertex_buffer: Option<DeviceBuffer<VertexData>>,
-    // instance_buffer: Option<DeviceBuffer<InstanceData>>,
-    // index_buffer: Option<DeviceBuffer<u32>>,
-    vertex_buffer: Option<Test<VertexData>>,
-    instance_buffer: Option<Test<InstanceData>>,
-    index_buffer: Option<Test<u32>>,
+    vertex_buffer: Option<VulkanBuffer<VertexData>>,
+    instance_buffer: Option<VulkanBuffer<InstanceData>>,
+    index_buffer: Option<VulkanBuffer<u32>>,
 
     instance_count: u32,
     frame_index: usize,
@@ -177,21 +189,24 @@ impl super::VulkanRenderpassBuilder for DeferredRenderer {
 
 impl DeferredRenderer {
     pub fn new(
-        device: Arc<Device>,
+        // device: Arc<Device>,
         window: Arc<Window>,
-        swapchain_info: &VulkanSwapchainInfo,
-        buffer_allocator: GenericBufferAllocator,
+        instance: &VulkanInstanceState,
+        // swapchain_info: &VulkanSwapchainInfo,
+        // queue_family_index: u32,
+        // command_buffer_allocator: Arc<StandardCommandBufferAllocator> ,
+        // buffer_allocator: GenericBufferAllocator,
+        // descriptor_set_allocator: primitives::DescriptorSetAllocator
     ) -> Self {
         // Render pass
-        let render_pass = DeferredRenderer::create_render_pass(device.clone(), swapchain_info);
+        let render_pass = DeferredRenderer::create_render_pass(instance.get_logical_device(), &instance.target.swapchain_info);
 
         // Data required in the renderer
-        // let attachments =
-        //     Self::get_attachment_image_views(window.clone(), buffer_allocator.clone());
         let attachments =
-            Self::create_frame_attachments(window.clone(), buffer_allocator, swapchain_info);
+            Self::create_frame_attachments(window.clone(), instance.allocators.memory_allocator.clone(), &instance.target.swapchain_info);
         let image_sampler = Sampler::new(
-            device.clone(),
+            // device.clone(),
+            instance.get_logical_device(),
             SamplerCreateInfo {
                 address_mode: [SamplerAddressMode::Repeat; 3],
                 min_filter: vulkano::image::sampler::Filter::Linear,
@@ -201,20 +216,33 @@ impl DeferredRenderer {
         )
         .unwrap();
 
+        // let store = DeferredRendererStore {
+        //     command_buffer_allocator,
+        //     memory_allocator: buffer_allocator.clone(),
+        //     descriptor_set_allocator,
+        //     swapchain: swapchain_info,
+
+        //     queue_family_index,
+        //     framebuffer_index: 0 // default. This parameter is changed every frame
+        // };
+
         // Pipelines
         let deferred_pipeline =
-            DeferredPipeline::new(window.clone(), device.clone(), render_pass.clone(), 0);
+            DeferredPipeline::new(window.clone(), instance.get_logical_device(), render_pass.clone(), 0);
 
         let lighting_pipeline =
-            LightingPipeline::new(window.clone(), device.clone(), render_pass.clone(), 1);
+            LightingPipeline::new(window.clone(), instance.get_logical_device(), render_pass.clone(), 1);
 
         let frame_buffers =
-            Self::create_framebuffer(render_pass.clone(), &attachments, swapchain_info);
+            Self::create_framebuffer(render_pass.clone(), &attachments, &instance.target.swapchain_info);
 
         Self {
             render_pass: render_pass,
             deferred_pipeline,
             lighting_pipeline,
+
+            // store: store,
+            // instance: instance,
 
             vertex_buffer: None,
             instance_buffer: None,
@@ -232,27 +260,27 @@ impl DeferredRenderer {
     }
 
     pub fn bind_vertex_buffer(&mut self, buffer: StagingBuffer<VertexData>) {
-        let _ = std::mem::replace(&mut self.vertex_buffer, Some(Test::StageState(buffer)));
+        let _ = std::mem::replace(&mut self.vertex_buffer, Some(VulkanBuffer::StageState(buffer)));
     }
 
     pub fn bind_instance_buffer(&mut self, buffer: StagingBuffer<InstanceData>) {
         // self.instance_count = buffer.count;
         self.instance_count = buffer.count() as u32;
-        let _ = std::mem::replace(&mut self.instance_buffer, Some(Test::StageState(buffer)));
+        let _ = std::mem::replace(&mut self.instance_buffer, Some(VulkanBuffer::StageState(buffer)));
     }
 
     // pub fn bind_index_buffer(&mut self, buffer: DeviceBuffer<u32>) {
     pub fn bind_index_buffer(&mut self, buffer: StagingBuffer<u32>) {
-        let _ = std::mem::replace(&mut self.index_buffer, Some(Test::StageState(buffer)));
+        let _ = std::mem::replace(&mut self.index_buffer, Some(VulkanBuffer::StageState(buffer)));
     }
 
     pub fn render(
         &mut self,
-        // instance: &VulkanInstance,
-        command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
-        memory_allocator: GenericBufferAllocator,
-        descriptor_set_allocator: primitives::DescriptorSetAllocator,
-        queue_family_index: u32,
+        instance: &VulkanInstanceState,
+        // command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+        // memory_allocator: GenericBufferAllocator,
+        // descriptor_set_allocator: primitives::DescriptorSetAllocator,
+        // queue_family_index: u32,
         frame_buffer_index: u32,
         data: DeferredRendererData,
     ) -> primitives::CommandBufferType {
@@ -261,13 +289,19 @@ impl DeferredRenderer {
         //     .map(|fb| {
         self.frame_index = frame_buffer_index as usize;
         let mut builder = AutoCommandBufferBuilder::primary(
-            &command_buffer_allocator,
-            queue_family_index,
+            // &self.store.command_buffer_allocator,
+            // self.store.queue_family_index,
+            &instance.allocators.command_buffer_allocator,
+            instance.get_first_queue().queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )
         .unwrap();
-        
-        self.prepare_buffers(&mut builder, memory_allocator.clone());
+
+        self.prepare_buffers(
+            &mut builder,
+            // self.store.memory_allocator.clone()
+            instance.allocators.memory_allocator.clone()
+        );
 
         builder
             .begin_render_pass(
@@ -284,13 +318,20 @@ impl DeferredRenderer {
             )
             .unwrap();
 
+        self.deferred_subpass(
+            &mut builder,
+            // self.store.memory_allocator.clone(),
+            instance.allocators.memory_allocator.clone(),
+            &data
+        );
 
-        self.deferred_subpass(&mut builder, memory_allocator.clone(), &data);
         Self::next_inline_subpass(&mut builder);
         self.lighting_subpass(
             &mut builder,
-            memory_allocator.clone(),
-            descriptor_set_allocator.clone(),
+            // self.store.memory_allocator.clone(),
+            // self.store.descriptor_set_allocator.clone(),
+            instance.allocators.memory_allocator.clone(),
+            instance.allocators.descriptor_set_allocator.clone(),
             &data,
         );
 
@@ -317,17 +358,18 @@ impl DeferredRenderer {
             LightingPipeline::new(window.clone(), device.clone(), self.render_pass.clone(), 1);
 
         self.render_pass = Self::create_render_pass(device, swapchain_info);
-        // self.attachments =
-        //     Self::get_attachment_image_views(window.clone(), buffer_allocator.clone());
         self.attachments = Self::create_frame_attachments(window, buffer_allocator, swapchain_info);
         self.frame_buffers =
             Self::create_framebuffer(self.render_pass.clone(), &self.attachments, swapchain_info);
     }
 }
 
-// Helper functions for the deferred renderer struct
-// This implementation contains only private methods and functions
+/// Helper functions for the deferred renderer struct
+/// This implementation contains only private methods and functions
 impl DeferredRenderer {
+
+
+    /// @TODO: Document function in detail.
     fn create_framebuffer(
         render_pass: Arc<RenderPass>,
         attachments: &Vec<DeferredRendererAttachments>,
@@ -361,6 +403,8 @@ impl DeferredRenderer {
             .collect()
     }
 
+
+    /// @TODO: Document function
     fn create_frame_attachments(
         window: Arc<Window>,
         allocator: primitives::GenericBufferAllocator,
@@ -439,6 +483,9 @@ impl DeferredRenderer {
         }
     }
 
+    /// ### Description
+    /// Defines the default values for frame buffers parameters passed
+    /// at the start of a rendering pipeline execution.
     fn get_clear_values() -> Vec<Option<ClearValue>> {
         // This is the same order as passed in the attachments field
         // of the ordered_passes_renderpass! macro
@@ -471,7 +518,6 @@ impl DeferredRenderer {
                     view: Into::<[[f32; 4]; 4]>::into(view),
                     projection: Into::<[[f32; 4]; 4]>::into(projection),
                 },
-                Default::default()
             )
             .get_write_descriptor(),
             UniformBuffer::create_immutable_sampler(1).get_write_descriptor(),
@@ -509,8 +555,7 @@ impl DeferredRenderer {
                 // model: Into::<[[f32; 4]; 4]>::into(glm::identity::<f32, 4>()),
                 view: Into::<[[f32; 4]; 4]>::into(view),
                 projection: Into::<[[f32; 4]; 4]>::into(projection),
-            },
-            Default::default()
+            }
         )
         .get_write_descriptor()];
 
@@ -565,6 +610,15 @@ impl DeferredRenderer {
         // Deferred subpass
         builder
             .bind_pipeline_graphics(self.deferred_pipeline.pipeline.clone())
+            .unwrap() //;
+            // .set_line_width(10.0)
+            // .unwrap()
+            .set_cull_mode(vulkano::pipeline::graphics::rasterization::CullMode::None)
+            .unwrap()
+            .set_primitive_topology(
+                // vulkano::pipeline::graphics::input_assembly::PrimitiveTopology::LineList,
+                vulkano::pipeline::graphics::input_assembly::PrimitiveTopology::TriangleStrip
+            )
             .unwrap();
 
         self.bind_buffers(&mut builder);
@@ -595,7 +649,7 @@ impl DeferredRenderer {
         self.draw_call(&mut builder);
     }
 
-    // Proceed to the command builder to the next subpass
+    /// Proceeds the command builder to the next subpass
     fn next_inline_subpass(builder: &mut primitives::PrimaryAutoCommandBuilderType) {
         builder
             .next_subpass(
@@ -608,13 +662,13 @@ impl DeferredRenderer {
             .unwrap();
     }
 
-    // Creates the device buffers required for binding buffers
+    /// Creates the device buffers required for binding buffers
     fn prepare_buffers(
         &mut self,
         builder: &mut primitives::PrimaryAutoCommandBuilderType,
         memory_allocator: GenericBufferAllocator,
     ) {
-        if let Some(Test::StageState(vertex_staging_buffer)) = self.vertex_buffer.clone() {
+        if let Some(VulkanBuffer::StageState(vertex_staging_buffer)) = self.vertex_buffer.clone() {
             let (host_vertex_buffer, device_vertex_buffer) = vertex_staging_buffer
                 .create_buffer_mapping(memory_allocator.clone(), BufferUsage::VERTEX_BUFFER);
 
@@ -625,41 +679,41 @@ impl DeferredRenderer {
                 ))
                 .unwrap();
 
-            self.vertex_buffer = Some(Test::DeviceState(DeviceBuffer {
+            self.vertex_buffer = Some(VulkanBuffer::DeviceState(DeviceBuffer {
                 buffer: device_vertex_buffer,
                 count: host_vertex_buffer.len() as u32,
             }));
         }
 
-        if let Some(Test::StageState(instance_staging_buffer)) = self.instance_buffer.clone() {
+        if let Some(VulkanBuffer::StageState(instance_staging_buffer)) = self.instance_buffer.clone() {
             let (host_instance_buffer, device_instance_buffer) = instance_staging_buffer
                 .create_buffer_mapping(memory_allocator.clone(), BufferUsage::VERTEX_BUFFER);
-            
+
             builder
                 .copy_buffer(CopyBufferInfo::buffers(
                     host_instance_buffer.clone(),
                     device_instance_buffer.clone(),
                 ))
                 .unwrap();
-            
-            self.instance_buffer = Some(Test::DeviceState(DeviceBuffer {
+
+            self.instance_buffer = Some(VulkanBuffer::DeviceState(DeviceBuffer {
                 buffer: device_instance_buffer,
                 count: host_instance_buffer.len() as u32,
             }));
         }
 
-        if let Some(Test::StageState(index_staging_buffer)) = self.index_buffer.clone() {
+        if let Some(VulkanBuffer::StageState(index_staging_buffer)) = self.index_buffer.clone() {
             let (host_index_buffer, device_index_buffer) = index_staging_buffer
                 .create_buffer_mapping(memory_allocator.clone(), BufferUsage::INDEX_BUFFER);
-            
+
             builder
                 .copy_buffer(CopyBufferInfo::buffers(
                     host_index_buffer.clone(),
                     device_index_buffer.clone(),
                 ))
                 .unwrap();
-            
-            self.index_buffer = Some(Test::DeviceState(DeviceBuffer {
+
+            self.index_buffer = Some(VulkanBuffer::DeviceState(DeviceBuffer {
                 buffer: device_index_buffer,
                 count: host_index_buffer.len() as u32,
             }));
@@ -668,8 +722,8 @@ impl DeferredRenderer {
 
     fn bind_buffers(&self, builder: &mut primitives::PrimaryAutoCommandBuilderType) {
         // Vertex buffer binding
-        if let Some(Test::DeviceState(vertex_buffer)) = self.vertex_buffer.clone() {
-            if let Some(Test::DeviceState(instance_buffer)) = self.instance_buffer.clone() {
+        if let Some(VulkanBuffer::DeviceState(vertex_buffer)) = self.vertex_buffer.clone() {
+            if let Some(VulkanBuffer::DeviceState(instance_buffer)) = self.instance_buffer.clone() {
                 builder
                     .bind_vertex_buffers(
                         0,
@@ -684,7 +738,7 @@ impl DeferredRenderer {
         }
 
         // Index buffer binding
-        if let Some(Test::DeviceState(index_buffer)) = self.index_buffer.clone() {
+        if let Some(VulkanBuffer::DeviceState(index_buffer)) = self.index_buffer.clone() {
             builder
                 .bind_index_buffer(index_buffer.buffer.clone())
                 .unwrap();
@@ -694,7 +748,7 @@ impl DeferredRenderer {
     fn draw_call(&self, builder: &mut primitives::PrimaryAutoCommandBuilderType) {
         let render_primitive_index_count = 3;
 
-        if let Some(Test::DeviceState(index_buffer)) = self.index_buffer.clone() {
+        if let Some(VulkanBuffer::DeviceState(index_buffer)) = self.index_buffer.clone() {
             builder
                 .draw_indexed(
                     index_buffer.count,

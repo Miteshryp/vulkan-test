@@ -6,27 +6,6 @@ use vulkano::{
 
 use super::{primitives::{Vec3, GenericBufferAllocator, DescriptorSetAllocator}, VertexData};
 
-// pub type GenericBufferAllocator =
-    // Arc<GenericMemoryAllocator<vulkano::memory::allocator::FreeListAllocator>>;
-// pub type DescriptorSetAllocator = Arc<StandardDescriptorSetAllocator>;
-
-// RUST philosophy questions
-// Explicit vs duplication
-// Rust prefers explicit nature in exchange for code duplication
-
-#[derive(Debug, Clone)]
-pub struct BufferOptions {
-    pub memory_type_filter: MemoryTypeFilter,
-}
-
-impl Default for BufferOptions {
-    fn default() -> Self {
-        Self {
-            // CPU -> GPU streaming
-            memory_type_filter: MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-        }
-    }
-}
 
 // Helper function
 pub fn create_buffer_from_vec<T>(

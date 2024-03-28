@@ -1,4 +1,6 @@
 use std::sync::Arc;
+
+use ahash::{self, HashSetExt};
 use vulkano::{
     descriptor_set::layout::DescriptorSetLayoutCreateFlags,
     device::Device,
@@ -9,13 +11,11 @@ use vulkano::{
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
             depth_stencil::{self, DepthState, DepthStencilState, StencilOpState, StencilState},
             input_assembly::InputAssemblyState,
-            rasterization::{FrontFace, RasterizationState},
+            rasterization::{FrontFace, LineStipple, RasterizationState},
             vertex_input::{Vertex, VertexBufferDescription, VertexDefinition},
             viewport::{Viewport, ViewportState},
             GraphicsPipelineCreateInfo,
-        },
-        layout::PipelineDescriptorSetLayoutCreateInfo,
-        GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+        }, layout::PipelineDescriptorSetLayoutCreateInfo, DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo
     },
     render_pass::{RenderPass, Subpass},
     shader::{self, EntryPoint},
@@ -126,6 +126,12 @@ impl DeferredPipeline {
         let depth_stencil = depth_stencil::DepthState::simple();
         // let depth_stencil = DepthState::default();
         // let rasterization_state_info: RasterizationState = ;
+        
+        let mut dynamic_state = ahash::HashSet::new();
+        dynamic_state.insert(DynamicState::CullMode);
+        dynamic_state.insert(DynamicState::PrimitiveTopology);
+        // dynamic_state.insert(DynamicState::LineWidth);
+
 
         GraphicsPipeline::new(
             logical_device,
@@ -165,7 +171,6 @@ impl DeferredPipeline {
                 // rasterization_state: Some(Default::default()),
                 rasterization_state: Some(RasterizationState {
                     cull_mode: graphics::rasterization::CullMode::Back,
-                    // front_face: FrontFace::CounterClockwise,
                     front_face: FrontFace::Clockwise,
                     ..Default::default()
                 }),
@@ -177,7 +182,7 @@ impl DeferredPipeline {
 
                 // Concerns with First pass of render pass
                 subpass: Some(subpass.into()),
-
+                dynamic_state,
                 ..GraphicsPipelineCreateInfo::layout(pipeline_layout)
             },
         )

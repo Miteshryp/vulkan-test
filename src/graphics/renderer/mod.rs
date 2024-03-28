@@ -20,20 +20,15 @@ trait VulkanRenderpassBuilder {
     ) -> Arc<RenderPass>;
 }
 
-pub trait RendererInterface {
+pub trait VulkanRenderer {
     fn bind_vertex_buffer(&mut self, buffer: DeviceBuffer<VertexData>);
     fn bind_instance_buffer(&mut self, buffer: DeviceBuffer<InstanceData>);
-    fn bind_index_buffer(&mut self, buffer: DeviceBuffer<u32>);
-
+    
+    fn bind_index_buffer(&mut self, bufofer: DeviceBuffer<u32>);
     fn render(
         &mut self,
         command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
         queue_family_index: u32,
-        fbo: Arc<Framebuffer>
+        frame_buffer_index: u32,
     ) -> primitives::CommandBufferType;
-}
-
-pub trait VulkanRendererInterface {
-    fn new() -> Self;
-    // fn build_cm
 }
